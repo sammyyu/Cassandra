@@ -486,6 +486,36 @@ public class CassandraServer implements Cassandra.Iface
         return desc;
     }
 
+    public String describeTableInFixedForm(String tableName)
+    {
+        StringBuffer desc = new StringBuffer();
+        Map<String, CFMetaData> tableMetaData = DatabaseDescriptor.getTableMetaData(tableName);
+
+        if (tableMetaData == null)
+        {
+            return "{}";
+        }
+
+        Iterator iter = tableMetaData.entrySet().iterator();
+        desc.append("{");
+        while (iter.hasNext())
+        {
+            Map.Entry<String, CFMetaData> pairs = (Map.Entry<String, CFMetaData>)iter.next();
+            CFMetaData columnFamilyMetaData = pairs.getValue();
+            desc.append("'" + columnFamilyMetaData.cfName + "':");
+            if (columnFamilyMetaData.columnType.equals("Super")) {
+                desc.append("'columnfamily'");
+            } else {
+                desc.append("'supercolumnfamily'");
+            }
+            if (iter.hasNext()) {
+                desc.append(", ");
+            }
+        }
+        desc.append("}");
+        return desc.toString();
+    }
+
     public CqlResult_t executeQuery(String query) throws TException
     {
         CqlResult_t result = new CqlResult_t();

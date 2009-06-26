@@ -157,6 +157,9 @@ service Cassandra {
   // describe specified table
   string         describeTable(1:string tableName),
 
+  // describe specified table in fixed form
+  string         describeTableInFixedForm(1:string tableName),
+
   // execute a CQL query
   CqlResult_t    executeQuery(1:string query)
 }
