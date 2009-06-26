@@ -54,7 +54,7 @@ public class Cassandra {
 
     public List<String> getStringListProperty(String propertyName) throws TException;
 
-    public Map<String,Map<String,String>> describeTable(String tableName) throws TException;
+    public Map<String,Map<String,String>> describeTable(String tableName) throws NotFoundException, TException;
 
     public CqlResult_t executeQuery(String query) throws TException;
 
@@ -718,7 +718,7 @@ public class Cassandra {
       throw new TApplicationException(TApplicationException.MISSING_RESULT, "getStringListProperty failed: unknown result");
     }
 
-    public Map<String,Map<String,String>> describeTable(String tableName) throws TException
+    public Map<String,Map<String,String>> describeTable(String tableName) throws NotFoundException, TException
     {
       send_describeTable(tableName);
       return recv_describeTable();
@@ -734,7 +734,7 @@ public class Cassandra {
       oprot_.getTransport().flush();
     }
 
-    public Map<String,Map<String,String>> recv_describeTable() throws TException
+    public Map<String,Map<String,String>> recv_describeTable() throws NotFoundException, TException
     {
       TMessage msg = iprot_.readMessageBegin();
       if (msg.type == TMessageType.EXCEPTION) {
@@ -747,6 +747,9 @@ public class Cassandra {
       iprot_.readMessageEnd();
       if (result.isSetSuccess()) {
         return result.success;
+      }
+      if (result.nfe != null) {
+        throw result.nfe;
       }
       throw new TApplicationException(TApplicationException.MISSING_RESULT, "describeTable failed: unknown result");
     }
@@ -1287,7 +1290,19 @@ public class Cassandra {
         args.read(iprot);
         iprot.readMessageEnd();
         describeTable_result result = new describeTable_result();
-        result.success = iface_.describeTable(args.tableName);
+        try {
+          result.success = iface_.describeTable(args.tableName);
+        } catch (NotFoundException nfe) {
+          result.nfe = nfe;
+        } catch (Throwable th) {
+          LOGGER.error("Internal error processing describeTable", th);
+          TApplicationException x = new TApplicationException(TApplicationException.INTERNAL_ERROR, "Internal error processing describeTable");
+          oprot.writeMessageBegin(new TMessage("describeTable", TMessageType.EXCEPTION, seqid));
+          x.write(oprot);
+          oprot.writeMessageEnd();
+          oprot.getTransport().flush();
+          return;
+        }
         oprot.writeMessageBegin(new TMessage("describeTable", TMessageType.REPLY, seqid));
         result.write(oprot);
         oprot.writeMessageEnd();
@@ -12959,9 +12974,12 @@ public class Cassandra {
   public static class describeTable_result implements TBase, java.io.Serializable, Cloneable   {
     private static final TStruct STRUCT_DESC = new TStruct("describeTable_result");
     private static final TField SUCCESS_FIELD_DESC = new TField("success", TType.MAP, (short)0);
+    private static final TField NFE_FIELD_DESC = new TField("nfe", TType.STRUCT, (short)1);
 
     public Map<String,Map<String,String>> success;
     public static final int SUCCESS = 0;
+    public NotFoundException nfe;
+    public static final int NFE = 1;
 
     private final Isset __isset = new Isset();
     private static final class Isset implements java.io.Serializable {
@@ -12974,6 +12992,8 @@ public class Cassandra {
               new MapMetaData(TType.MAP, 
                   new FieldValueMetaData(TType.STRING), 
                   new FieldValueMetaData(TType.STRING)))));
+      put(NFE, new FieldMetaData("nfe", TFieldRequirementType.DEFAULT, 
+          new FieldValueMetaData(TType.STRUCT)));
     }});
 
     static {
@@ -12984,10 +13004,12 @@ public class Cassandra {
     }
 
     public describeTable_result(
-      Map<String,Map<String,String>> success)
+      Map<String,Map<String,String>> success,
+      NotFoundException nfe)
     {
       this();
       this.success = success;
+      this.nfe = nfe;
     }
 
     /**
@@ -13019,6 +13041,9 @@ public class Cassandra {
           __this__success.put(__this__success_copy_key, __this__success_copy_value);
         }
         this.success = __this__success;
+      }
+      if (other.isSetNfe()) {
+        this.nfe = new NotFoundException(other.nfe);
       }
     }
 
@@ -13061,6 +13086,29 @@ public class Cassandra {
       }
     }
 
+    public NotFoundException getNfe() {
+      return this.nfe;
+    }
+
+    public void setNfe(NotFoundException nfe) {
+      this.nfe = nfe;
+    }
+
+    public void unsetNfe() {
+      this.nfe = null;
+    }
+
+    // Returns true if field nfe is set (has been asigned a value) and false otherwise
+    public boolean isSetNfe() {
+      return this.nfe != null;
+    }
+
+    public void setNfeIsSet(boolean value) {
+      if (!value) {
+        this.nfe = null;
+      }
+    }
+
     public void setFieldValue(int fieldID, Object value) {
       switch (fieldID) {
       case SUCCESS:
@@ -13068,6 +13116,14 @@ public class Cassandra {
           unsetSuccess();
         } else {
           setSuccess((Map<String,Map<String,String>>)value);
+        }
+        break;
+
+      case NFE:
+        if (value == null) {
+          unsetNfe();
+        } else {
+          setNfe((NotFoundException)value);
         }
         break;
 
@@ -13081,6 +13137,9 @@ public class Cassandra {
       case SUCCESS:
         return getSuccess();
 
+      case NFE:
+        return getNfe();
+
       default:
         throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
       }
@@ -13091,6 +13150,8 @@ public class Cassandra {
       switch (fieldID) {
       case SUCCESS:
         return isSetSuccess();
+      case NFE:
+        return isSetNfe();
       default:
         throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
       }
@@ -13115,6 +13176,15 @@ public class Cassandra {
         if (!(this_present_success && that_present_success))
           return false;
         if (!this.success.equals(that.success))
+          return false;
+      }
+
+      boolean this_present_nfe = true && this.isSetNfe();
+      boolean that_present_nfe = true && that.isSetNfe();
+      if (this_present_nfe || that_present_nfe) {
+        if (!(this_present_nfe && that_present_nfe))
+          return false;
+        if (!this.nfe.equals(that.nfe))
           return false;
       }
 
@@ -13168,6 +13238,14 @@ public class Cassandra {
               TProtocolUtil.skip(iprot, field.type);
             }
             break;
+          case NFE:
+            if (field.type == TType.STRUCT) {
+              this.nfe = new NotFoundException();
+              this.nfe.read(iprot);
+            } else { 
+              TProtocolUtil.skip(iprot, field.type);
+            }
+            break;
           default:
             TProtocolUtil.skip(iprot, field.type);
             break;
@@ -13202,6 +13280,10 @@ public class Cassandra {
           oprot.writeMapEnd();
         }
         oprot.writeFieldEnd();
+      } else if (this.isSetNfe()) {
+        oprot.writeFieldBegin(NFE_FIELD_DESC);
+        this.nfe.write(oprot);
+        oprot.writeFieldEnd();
       }
       oprot.writeFieldStop();
       oprot.writeStructEnd();
@@ -13217,6 +13299,14 @@ public class Cassandra {
         sb.append("null");
       } else {
         sb.append(this.success);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("nfe:");
+      if (this.nfe == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.nfe);
       }
       first = false;
       sb.append(")");

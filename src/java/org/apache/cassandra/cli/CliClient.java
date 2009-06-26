@@ -234,18 +234,23 @@ public class CliClient
         String tableName = ast.getChild(0).getText();
         
         // Describe and display
-        Map<String,Map<String,String>> columnFamiliesMap = thriftClient_.describeTable(tableName);
-        for (String columnFamilyName: columnFamiliesMap.keySet()) {
-            Map<String, String> columnMap = columnFamiliesMap.get(columnFamilyName);
-            String desc = columnMap.get("desc");
-            String columnFamilyType = columnMap.get("type");
-            String sort = columnMap.get("sort");
-            Integer flushperiod = Integer.parseInt(columnMap.get("flushperiod"));
-            css_.out.println(desc);
-            css_.out.println("Column Family Type: " + columnFamilyType);
-            css_.out.println("Column Sorted By: " + sort);
-            css_.out.println("flush period: " + flushperiod + " minutes");
-            css_.out.println("------");
+        Map<String, Map<String, String>> columnFamiliesMap;
+        try {
+            columnFamiliesMap = thriftClient_.describeTable(tableName);
+            for (String columnFamilyName: columnFamiliesMap.keySet()) {
+                Map<String, String> columnMap = columnFamiliesMap.get(columnFamilyName);
+                String desc = columnMap.get("desc");
+                String columnFamilyType = columnMap.get("type");
+                String sort = columnMap.get("sort");
+                Integer flushperiod = Integer.parseInt(columnMap.get("flushperiod"));
+                css_.out.println(desc);
+                css_.out.println("Column Family Type: " + columnFamilyType);
+                css_.out.println("Column Sorted By: " + sort);
+                css_.out.println("flush period: " + flushperiod + " minutes");
+                css_.out.println("------");
+            }
+        } catch (NotFoundException e) {
+            css_.out.println("Table " + tableName + " could not be found.");
         }
         
         return;

@@ -467,11 +467,16 @@ public class CassandraServer implements Cassandra.Iface
         }
     }
 
-    public Map<String,Map<String,String>> describeTable(String tableName)
+    public Map<String,Map<String,String>> describeTable(String tableName) throws NotFoundException
     {
         Map <String, Map<String, String>> columnFamiliesMap = new HashMap<String, Map<String, String>> ();
 
         Map<String, CFMetaData> tableMetaData = DatabaseDescriptor.getTableMetaData(tableName);
+        // table doesn't exist
+        if (tableMetaData == null) {
+            throw new NotFoundException();
+        }
+        
         Iterator iter = tableMetaData.entrySet().iterator();
         while (iter.hasNext())
         {
