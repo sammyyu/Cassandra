@@ -54,9 +54,7 @@ public class Cassandra {
 
     public List<String> getStringListProperty(String propertyName) throws TException;
 
-    public String describeTable(String tableName) throws TException;
-
-    public String describeTableInFixedForm(String tableName) throws TException;
+    public Map<String,Map<String,String>> describeTable(String tableName) throws TException;
 
     public CqlResult_t executeQuery(String query) throws TException;
 
@@ -720,7 +718,7 @@ public class Cassandra {
       throw new TApplicationException(TApplicationException.MISSING_RESULT, "getStringListProperty failed: unknown result");
     }
 
-    public String describeTable(String tableName) throws TException
+    public Map<String,Map<String,String>> describeTable(String tableName) throws TException
     {
       send_describeTable(tableName);
       return recv_describeTable();
@@ -736,7 +734,7 @@ public class Cassandra {
       oprot_.getTransport().flush();
     }
 
-    public String recv_describeTable() throws TException
+    public Map<String,Map<String,String>> recv_describeTable() throws TException
     {
       TMessage msg = iprot_.readMessageBegin();
       if (msg.type == TMessageType.EXCEPTION) {
@@ -751,39 +749,6 @@ public class Cassandra {
         return result.success;
       }
       throw new TApplicationException(TApplicationException.MISSING_RESULT, "describeTable failed: unknown result");
-    }
-
-    public String describeTableInFixedForm(String tableName) throws TException
-    {
-      send_describeTableInFixedForm(tableName);
-      return recv_describeTableInFixedForm();
-    }
-
-    public void send_describeTableInFixedForm(String tableName) throws TException
-    {
-      oprot_.writeMessageBegin(new TMessage("describeTableInFixedForm", TMessageType.CALL, seqid_));
-      describeTableInFixedForm_args args = new describeTableInFixedForm_args();
-      args.tableName = tableName;
-      args.write(oprot_);
-      oprot_.writeMessageEnd();
-      oprot_.getTransport().flush();
-    }
-
-    public String recv_describeTableInFixedForm() throws TException
-    {
-      TMessage msg = iprot_.readMessageBegin();
-      if (msg.type == TMessageType.EXCEPTION) {
-        TApplicationException x = TApplicationException.read(iprot_);
-        iprot_.readMessageEnd();
-        throw x;
-      }
-      describeTableInFixedForm_result result = new describeTableInFixedForm_result();
-      result.read(iprot_);
-      iprot_.readMessageEnd();
-      if (result.isSetSuccess()) {
-        return result.success;
-      }
-      throw new TApplicationException(TApplicationException.MISSING_RESULT, "describeTableInFixedForm failed: unknown result");
     }
 
     public CqlResult_t executeQuery(String query) throws TException
@@ -842,7 +807,6 @@ public class Cassandra {
       processMap_.put("getStringProperty", new getStringProperty());
       processMap_.put("getStringListProperty", new getStringListProperty());
       processMap_.put("describeTable", new describeTable());
-      processMap_.put("describeTableInFixedForm", new describeTableInFixedForm());
       processMap_.put("executeQuery", new executeQuery());
     }
 
@@ -1325,22 +1289,6 @@ public class Cassandra {
         describeTable_result result = new describeTable_result();
         result.success = iface_.describeTable(args.tableName);
         oprot.writeMessageBegin(new TMessage("describeTable", TMessageType.REPLY, seqid));
-        result.write(oprot);
-        oprot.writeMessageEnd();
-        oprot.getTransport().flush();
-      }
-
-    }
-
-    private class describeTableInFixedForm implements ProcessFunction {
-      public void process(int seqid, TProtocol iprot, TProtocol oprot) throws TException
-      {
-        describeTableInFixedForm_args args = new describeTableInFixedForm_args();
-        args.read(iprot);
-        iprot.readMessageEnd();
-        describeTableInFixedForm_result result = new describeTableInFixedForm_result();
-        result.success = iface_.describeTableInFixedForm(args.tableName);
-        oprot.writeMessageBegin(new TMessage("describeTableInFixedForm", TMessageType.REPLY, seqid));
         result.write(oprot);
         oprot.writeMessageEnd();
         oprot.getTransport().flush();
@@ -13010,9 +12958,9 @@ public class Cassandra {
 
   public static class describeTable_result implements TBase, java.io.Serializable, Cloneable   {
     private static final TStruct STRUCT_DESC = new TStruct("describeTable_result");
-    private static final TField SUCCESS_FIELD_DESC = new TField("success", TType.STRING, (short)0);
+    private static final TField SUCCESS_FIELD_DESC = new TField("success", TType.MAP, (short)0);
 
-    public String success;
+    public Map<String,Map<String,String>> success;
     public static final int SUCCESS = 0;
 
     private final Isset __isset = new Isset();
@@ -13021,7 +12969,11 @@ public class Cassandra {
 
     public static final Map<Integer, FieldMetaData> metaDataMap = Collections.unmodifiableMap(new HashMap<Integer, FieldMetaData>() {{
       put(SUCCESS, new FieldMetaData("success", TFieldRequirementType.DEFAULT, 
-          new FieldValueMetaData(TType.STRING)));
+          new MapMetaData(TType.MAP, 
+              new FieldValueMetaData(TType.STRING), 
+              new MapMetaData(TType.MAP, 
+                  new FieldValueMetaData(TType.STRING), 
+                  new FieldValueMetaData(TType.STRING)))));
     }});
 
     static {
@@ -13032,7 +12984,7 @@ public class Cassandra {
     }
 
     public describeTable_result(
-      String success)
+      Map<String,Map<String,String>> success)
     {
       this();
       this.success = success;
@@ -13043,7 +12995,30 @@ public class Cassandra {
      */
     public describeTable_result(describeTable_result other) {
       if (other.isSetSuccess()) {
-        this.success = other.success;
+        Map<String,Map<String,String>> __this__success = new HashMap<String,Map<String,String>>();
+        for (Map.Entry<String, Map<String,String>> other_element : other.success.entrySet()) {
+
+          String other_element_key = other_element.getKey();
+          Map<String,String> other_element_value = other_element.getValue();
+
+          String __this__success_copy_key = other_element_key;
+
+          Map<String,String> __this__success_copy_value = new HashMap<String,String>();
+          for (Map.Entry<String, String> other_element_value_element : other_element_value.entrySet()) {
+
+            String other_element_value_element_key = other_element_value_element.getKey();
+            String other_element_value_element_value = other_element_value_element.getValue();
+
+            String __this__success_copy_value_copy_key = other_element_value_element_key;
+
+            String __this__success_copy_value_copy_value = other_element_value_element_value;
+
+            __this__success_copy_value.put(__this__success_copy_value_copy_key, __this__success_copy_value_copy_value);
+          }
+
+          __this__success.put(__this__success_copy_key, __this__success_copy_value);
+        }
+        this.success = __this__success;
       }
     }
 
@@ -13052,11 +13027,22 @@ public class Cassandra {
       return new describeTable_result(this);
     }
 
-    public String getSuccess() {
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public void putToSuccess(String key, Map<String,String> val) {
+      if (this.success == null) {
+        this.success = new HashMap<String,Map<String,String>>();
+      }
+      this.success.put(key, val);
+    }
+
+    public Map<String,Map<String,String>> getSuccess() {
       return this.success;
     }
 
-    public void setSuccess(String success) {
+    public void setSuccess(Map<String,Map<String,String>> success) {
       this.success = success;
     }
 
@@ -13081,7 +13067,7 @@ public class Cassandra {
         if (value == null) {
           unsetSuccess();
         } else {
-          setSuccess((String)value);
+          setSuccess((Map<String,Map<String,String>>)value);
         }
         break;
 
@@ -13152,8 +13138,32 @@ public class Cassandra {
         switch (field.id)
         {
           case SUCCESS:
-            if (field.type == TType.STRING) {
-              this.success = iprot.readString();
+            if (field.type == TType.MAP) {
+              {
+                TMap _map75 = iprot.readMapBegin();
+                this.success = new HashMap<String,Map<String,String>>(2*_map75.size);
+                for (int _i76 = 0; _i76 < _map75.size; ++_i76)
+                {
+                  String _key77;
+                  Map<String,String> _val78;
+                  _key77 = iprot.readString();
+                  {
+                    TMap _map79 = iprot.readMapBegin();
+                    _val78 = new HashMap<String,String>(2*_map79.size);
+                    for (int _i80 = 0; _i80 < _map79.size; ++_i80)
+                    {
+                      String _key81;
+                      String _val82;
+                      _key81 = iprot.readString();
+                      _val82 = iprot.readString();
+                      _val78.put(_key81, _val82);
+                    }
+                    iprot.readMapEnd();
+                  }
+                  this.success.put(_key77, _val78);
+                }
+                iprot.readMapEnd();
+              }
             } else { 
               TProtocolUtil.skip(iprot, field.type);
             }
@@ -13176,7 +13186,21 @@ public class Cassandra {
 
       if (this.isSetSuccess()) {
         oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
-        oprot.writeString(this.success);
+        {
+          oprot.writeMapBegin(new TMap(TType.STRING, TType.MAP, this.success.size()));
+          for (Map.Entry<String, Map<String,String>> _iter83 : this.success.entrySet())          {
+            oprot.writeString(_iter83.getKey());
+            {
+              oprot.writeMapBegin(new TMap(TType.STRING, TType.STRING, _iter83.getValue().size()));
+              for (Map.Entry<String, String> _iter84 : _iter83.getValue().entrySet())              {
+                oprot.writeString(_iter84.getKey());
+                oprot.writeString(_iter84.getValue());
+              }
+              oprot.writeMapEnd();
+            }
+          }
+          oprot.writeMapEnd();
+        }
         oprot.writeFieldEnd();
       }
       oprot.writeFieldStop();
@@ -13186,403 +13210,6 @@ public class Cassandra {
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder("describeTable_result(");
-      boolean first = true;
-
-      sb.append("success:");
-      if (this.success == null) {
-        sb.append("null");
-      } else {
-        sb.append(this.success);
-      }
-      first = false;
-      sb.append(")");
-      return sb.toString();
-    }
-
-    public void validate() throws TException {
-      // check for required fields
-      // check that fields of type enum have valid values
-    }
-
-  }
-
-  public static class describeTableInFixedForm_args implements TBase, java.io.Serializable, Cloneable   {
-    private static final TStruct STRUCT_DESC = new TStruct("describeTableInFixedForm_args");
-    private static final TField TABLE_NAME_FIELD_DESC = new TField("tableName", TType.STRING, (short)1);
-
-    public String tableName;
-    public static final int TABLENAME = 1;
-
-    private final Isset __isset = new Isset();
-    private static final class Isset implements java.io.Serializable {
-    }
-
-    public static final Map<Integer, FieldMetaData> metaDataMap = Collections.unmodifiableMap(new HashMap<Integer, FieldMetaData>() {{
-      put(TABLENAME, new FieldMetaData("tableName", TFieldRequirementType.DEFAULT, 
-          new FieldValueMetaData(TType.STRING)));
-    }});
-
-    static {
-      FieldMetaData.addStructMetaDataMap(describeTableInFixedForm_args.class, metaDataMap);
-    }
-
-    public describeTableInFixedForm_args() {
-    }
-
-    public describeTableInFixedForm_args(
-      String tableName)
-    {
-      this();
-      this.tableName = tableName;
-    }
-
-    /**
-     * Performs a deep copy on <i>other</i>.
-     */
-    public describeTableInFixedForm_args(describeTableInFixedForm_args other) {
-      if (other.isSetTableName()) {
-        this.tableName = other.tableName;
-      }
-    }
-
-    @Override
-    public describeTableInFixedForm_args clone() {
-      return new describeTableInFixedForm_args(this);
-    }
-
-    public String getTableName() {
-      return this.tableName;
-    }
-
-    public void setTableName(String tableName) {
-      this.tableName = tableName;
-    }
-
-    public void unsetTableName() {
-      this.tableName = null;
-    }
-
-    // Returns true if field tableName is set (has been asigned a value) and false otherwise
-    public boolean isSetTableName() {
-      return this.tableName != null;
-    }
-
-    public void setTableNameIsSet(boolean value) {
-      if (!value) {
-        this.tableName = null;
-      }
-    }
-
-    public void setFieldValue(int fieldID, Object value) {
-      switch (fieldID) {
-      case TABLENAME:
-        if (value == null) {
-          unsetTableName();
-        } else {
-          setTableName((String)value);
-        }
-        break;
-
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    public Object getFieldValue(int fieldID) {
-      switch (fieldID) {
-      case TABLENAME:
-        return getTableName();
-
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    // Returns true if field corresponding to fieldID is set (has been asigned a value) and false otherwise
-    public boolean isSet(int fieldID) {
-      switch (fieldID) {
-      case TABLENAME:
-        return isSetTableName();
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    @Override
-    public boolean equals(Object that) {
-      if (that == null)
-        return false;
-      if (that instanceof describeTableInFixedForm_args)
-        return this.equals((describeTableInFixedForm_args)that);
-      return false;
-    }
-
-    public boolean equals(describeTableInFixedForm_args that) {
-      if (that == null)
-        return false;
-
-      boolean this_present_tableName = true && this.isSetTableName();
-      boolean that_present_tableName = true && that.isSetTableName();
-      if (this_present_tableName || that_present_tableName) {
-        if (!(this_present_tableName && that_present_tableName))
-          return false;
-        if (!this.tableName.equals(that.tableName))
-          return false;
-      }
-
-      return true;
-    }
-
-    @Override
-    public int hashCode() {
-      return 0;
-    }
-
-    public void read(TProtocol iprot) throws TException {
-      TField field;
-      iprot.readStructBegin();
-      while (true)
-      {
-        field = iprot.readFieldBegin();
-        if (field.type == TType.STOP) { 
-          break;
-        }
-        switch (field.id)
-        {
-          case TABLENAME:
-            if (field.type == TType.STRING) {
-              this.tableName = iprot.readString();
-            } else { 
-              TProtocolUtil.skip(iprot, field.type);
-            }
-            break;
-          default:
-            TProtocolUtil.skip(iprot, field.type);
-            break;
-        }
-        iprot.readFieldEnd();
-      }
-      iprot.readStructEnd();
-
-
-      // check for required fields of primitive type, which can't be checked in the validate method
-      validate();
-    }
-
-    public void write(TProtocol oprot) throws TException {
-      validate();
-
-      oprot.writeStructBegin(STRUCT_DESC);
-      if (this.tableName != null) {
-        oprot.writeFieldBegin(TABLE_NAME_FIELD_DESC);
-        oprot.writeString(this.tableName);
-        oprot.writeFieldEnd();
-      }
-      oprot.writeFieldStop();
-      oprot.writeStructEnd();
-    }
-
-    @Override
-    public String toString() {
-      StringBuilder sb = new StringBuilder("describeTableInFixedForm_args(");
-      boolean first = true;
-
-      sb.append("tableName:");
-      if (this.tableName == null) {
-        sb.append("null");
-      } else {
-        sb.append(this.tableName);
-      }
-      first = false;
-      sb.append(")");
-      return sb.toString();
-    }
-
-    public void validate() throws TException {
-      // check for required fields
-      // check that fields of type enum have valid values
-    }
-
-  }
-
-  public static class describeTableInFixedForm_result implements TBase, java.io.Serializable, Cloneable   {
-    private static final TStruct STRUCT_DESC = new TStruct("describeTableInFixedForm_result");
-    private static final TField SUCCESS_FIELD_DESC = new TField("success", TType.STRING, (short)0);
-
-    public String success;
-    public static final int SUCCESS = 0;
-
-    private final Isset __isset = new Isset();
-    private static final class Isset implements java.io.Serializable {
-    }
-
-    public static final Map<Integer, FieldMetaData> metaDataMap = Collections.unmodifiableMap(new HashMap<Integer, FieldMetaData>() {{
-      put(SUCCESS, new FieldMetaData("success", TFieldRequirementType.DEFAULT, 
-          new FieldValueMetaData(TType.STRING)));
-    }});
-
-    static {
-      FieldMetaData.addStructMetaDataMap(describeTableInFixedForm_result.class, metaDataMap);
-    }
-
-    public describeTableInFixedForm_result() {
-    }
-
-    public describeTableInFixedForm_result(
-      String success)
-    {
-      this();
-      this.success = success;
-    }
-
-    /**
-     * Performs a deep copy on <i>other</i>.
-     */
-    public describeTableInFixedForm_result(describeTableInFixedForm_result other) {
-      if (other.isSetSuccess()) {
-        this.success = other.success;
-      }
-    }
-
-    @Override
-    public describeTableInFixedForm_result clone() {
-      return new describeTableInFixedForm_result(this);
-    }
-
-    public String getSuccess() {
-      return this.success;
-    }
-
-    public void setSuccess(String success) {
-      this.success = success;
-    }
-
-    public void unsetSuccess() {
-      this.success = null;
-    }
-
-    // Returns true if field success is set (has been asigned a value) and false otherwise
-    public boolean isSetSuccess() {
-      return this.success != null;
-    }
-
-    public void setSuccessIsSet(boolean value) {
-      if (!value) {
-        this.success = null;
-      }
-    }
-
-    public void setFieldValue(int fieldID, Object value) {
-      switch (fieldID) {
-      case SUCCESS:
-        if (value == null) {
-          unsetSuccess();
-        } else {
-          setSuccess((String)value);
-        }
-        break;
-
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    public Object getFieldValue(int fieldID) {
-      switch (fieldID) {
-      case SUCCESS:
-        return getSuccess();
-
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    // Returns true if field corresponding to fieldID is set (has been asigned a value) and false otherwise
-    public boolean isSet(int fieldID) {
-      switch (fieldID) {
-      case SUCCESS:
-        return isSetSuccess();
-      default:
-        throw new IllegalArgumentException("Field " + fieldID + " doesn't exist!");
-      }
-    }
-
-    @Override
-    public boolean equals(Object that) {
-      if (that == null)
-        return false;
-      if (that instanceof describeTableInFixedForm_result)
-        return this.equals((describeTableInFixedForm_result)that);
-      return false;
-    }
-
-    public boolean equals(describeTableInFixedForm_result that) {
-      if (that == null)
-        return false;
-
-      boolean this_present_success = true && this.isSetSuccess();
-      boolean that_present_success = true && that.isSetSuccess();
-      if (this_present_success || that_present_success) {
-        if (!(this_present_success && that_present_success))
-          return false;
-        if (!this.success.equals(that.success))
-          return false;
-      }
-
-      return true;
-    }
-
-    @Override
-    public int hashCode() {
-      return 0;
-    }
-
-    public void read(TProtocol iprot) throws TException {
-      TField field;
-      iprot.readStructBegin();
-      while (true)
-      {
-        field = iprot.readFieldBegin();
-        if (field.type == TType.STOP) { 
-          break;
-        }
-        switch (field.id)
-        {
-          case SUCCESS:
-            if (field.type == TType.STRING) {
-              this.success = iprot.readString();
-            } else { 
-              TProtocolUtil.skip(iprot, field.type);
-            }
-            break;
-          default:
-            TProtocolUtil.skip(iprot, field.type);
-            break;
-        }
-        iprot.readFieldEnd();
-      }
-      iprot.readStructEnd();
-
-
-      // check for required fields of primitive type, which can't be checked in the validate method
-      validate();
-    }
-
-    public void write(TProtocol oprot) throws TException {
-      oprot.writeStructBegin(STRUCT_DESC);
-
-      if (this.isSetSuccess()) {
-        oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
-        oprot.writeString(this.success);
-        oprot.writeFieldEnd();
-      }
-      oprot.writeFieldStop();
-      oprot.writeStructEnd();
-    }
-
-    @Override
-    public String toString() {
-      StringBuilder sb = new StringBuilder("describeTableInFixedForm_result(");
       boolean first = true;
 
       sb.append("success:");
