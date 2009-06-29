@@ -169,7 +169,7 @@ public class FailureDetector implements IFailureDetector, FailureDetectorMBean
         heartbeatWindow.add(now);
     }
     
-    public void intepret(EndPoint ep)
+    public void interpret(EndPoint ep)
     {
         ArrivalWindow hbWnd = arrivalSamples_.get(ep);
         if ( hbWnd == null )
@@ -238,11 +238,9 @@ class ArrivalWindow
     private static Logger logger_ = Logger.getLogger(ArrivalWindow.class);
     private double tLast_ = 0L;
     private BoundedStatsDeque arrivalIntervals_;
-    private int size_;
-    
+
     ArrivalWindow(int size)
     {
-        size_ = size;
         arrivalIntervals_ = new BoundedStatsDeque(size);
     }
     
