@@ -274,13 +274,7 @@ public class FileUtils
      */
     public static void createHardLink(File sourceFile, File destinationFile) throws IOException {
     	ProcessBuilder pb = new ProcessBuilder("ln", sourceFile.getAbsolutePath(), destinationFile.getAbsolutePath());
-    	Process p = pb.start();
-    }
-
-    public static void main(String []args) throws IOException {
-        System.out.println("Hello world");
-        createHardLink(new File("/home/sammy/orig.txt"), new File("/home/sammy/link.txt"));
-        System.out.println("Completed");
+    	pb.start();
     }
 
 }
