@@ -405,6 +405,69 @@ public class Table
         }   
     }
     
+    
+    /*
+     * Take a snapshot of the entire set of column families with a given timestamp.
+     * 
+     * @param clientSuppliedName the tag associated with the name of the snapshot.  This
+     *                           value can be null.
+     */
+    public void snapshot(String clientSuppliedName) throws IOException
+    {
+    	snapshot(clientSuppliedName, System.currentTimeMillis());
+    }
+    
+    /*
+     * Take a snapshot of the entire set of column families with a given timestamp.
+     * 
+     * @param clientSuppliedName the tag associated with the name of the snapshot.  This
+     *                           value can be null.
+     * @param timestamp          the timestamp associated with this snapshot.                          
+     */
+    public void snapshot(String clientSuppliedName, long timestamp) throws IOException
+    {
+       String snapshotDirectory = DatabaseDescriptor.getSnapshotDirectory();
+       if (snapshotDirectory == null) {
+    	   throw new IOException("Snapshot directory must be set.");
+       }
+       File snapshotDir = new File(snapshotDirectory);
+       if (!snapshotDir.exists()) {
+    	   snapshotDir.mkdir();
+       }
+       
+       String currentSnapshotDir = null;
+       if (clientSuppliedName != null && !clientSuppliedName.equals("")) {
+           currentSnapshotDir = snapshotDirectory + System.getProperty("file.separator") + System.currentTimeMillis() + "-" + clientSuppliedName;
+       }
+       else
+       {
+           currentSnapshotDir = snapshotDirectory + System.getProperty("file.separator") + System.currentTimeMillis();
+       }
+       File snapshotTagDirectory = new File(currentSnapshotDir);
+       if (!snapshotTagDirectory.exists()) {
+    	   snapshotTagDirectory.mkdir();
+       }
+    
+       // put each CF snapshot under the table directory.
+       currentSnapshotDir = currentSnapshotDir + System.getProperty("file.separator") + table_;
+
+       /* Now take a snapshot of all columnfamily stores */
+       Set<String> columnFamilies = tableMetadata_.getColumnFamilies();
+       for (String columnFamily : columnFamilies) 
+       {
+            ColumnFamilyStore cfStore = columnFamilyStores_.get(columnFamily);
+            if (cfStore != null)
+            {
+                cfStore.snapshot(currentSnapshotDir);
+            }
+       }
+       
+       if (logger_.isDebugEnabled()) 
+       {
+    	   logger_.debug("Snapshot for " + table_ + " table put into " + currentSnapshotDir + ".");
+       }
+    }
+    
     /*
      * Clear the existing snapshots in the system
      */

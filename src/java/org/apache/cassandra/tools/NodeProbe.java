@@ -426,6 +426,15 @@ public class NodeProbe
     }
     
     /**
+     * Take a snapshot of all the tables.
+     */
+    public void takeSnapshot(PrintStream outs) throws IOException
+    {
+        ssProxy.takeAllSnapshot("");
+    }
+
+
+    /**
      * Retrieve any non-option arguments passed on the command line.
      * 
      * @return non-option command args
@@ -454,7 +463,7 @@ public class NodeProbe
     {
         HelpFormatter hf = new HelpFormatter();
         String header = String.format(
-                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats");
+                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot");
         String usage = String.format("java %s -host <arg> <command>%n", NodeProbe.class.getName());
         hf.printHelp(usage, "", options, header);
     }
@@ -514,6 +523,10 @@ public class NodeProbe
         else if (cmdName.equals("cfstats"))
         {
             probe.printColumnFamilyStats(System.out);
+        }
+        else if (cmdName.equals("snapshot"))
+        {
+            probe.takeSnapshot(System.out);
         }
         else
         {

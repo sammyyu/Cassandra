@@ -263,4 +263,24 @@ public class FileUtils
         // The directory is now empty so now it can be smoked
         return dir.delete();
     }
+
+    /**
+     * Create a hard link for a given file.
+     * 
+     * @param sourceFile      The name of the source file.
+     * @param destinationFile The name of the destination file.
+     * 
+     * @throws IOException if an error has occurred while creating the link.
+     */
+    public static void createHardLink(File sourceFile, File destinationFile) throws IOException {
+    	ProcessBuilder pb = new ProcessBuilder("ln", sourceFile.getAbsolutePath(), destinationFile.getAbsolutePath());
+    	Process p = pb.start();
+    }
+
+    public static void main(String []args) throws IOException {
+        System.out.println("Hello world");
+        createHardLink(new File("/home/sammy/orig.txt"), new File("/home/sammy/link.txt"));
+        System.out.println("Completed");
+    }
+
 }

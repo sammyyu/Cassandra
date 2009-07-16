@@ -101,6 +101,7 @@
     <DataFileDirectories>
         <DataFileDirectory>/var/cassandra/data</DataFileDirectory>
     </DataFileDirectories>
+    <SnapshotDirectory>/var/cassandra/snapshot</SnapshotDirectory>
     <CalloutLocation>/var/cassandra/callouts</CalloutLocation>
     <BootstrapFileDirectory>/var/cassandra/bootstrap</BootstrapFileDirectory>
     <StagingFileDirectory>/var/cassandra/staging</StagingFileDirectory>

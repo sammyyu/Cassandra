@@ -1518,6 +1518,31 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
     }
 
+    /*
+     * Take a snap shot of this columnfamily store.
+     */
+    public void snapshot(String snapshotDirectory) throws IOException
+    {
+       File snapshotDir = new File(snapshotDirectory);
+       if (!snapshotDir.exists()) {
+           snapshotDir.mkdir();
+       }
+       sstableLock_.writeLock().lock();
+       List<String> files = new ArrayList<String>(ssTables_.keySet());
+       try {
+            for (String file : files)
+            {
+               File f = new File(file);
+               File hardLinkFile = new File(snapshotDirectory + System.getProperty("file.separator") + f.getName());
+               FileUtils.createHardLink(f, hardLinkFile);
+            }
+        }
+        finally
+        {
+            sstableLock_.writeLock().unlock();
+        }
+    }
+
     /**
      * for testing.  no effort is made to clear historical memtables.
      */
