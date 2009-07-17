@@ -426,30 +426,13 @@ public class Table
      */
     public void snapshot(String clientSuppliedName, long timestamp) throws IOException
     {
-       String snapshotDirectory = DatabaseDescriptor.getSnapshotDirectory();
-       if (snapshotDirectory == null) {
-    	   throw new IOException("Snapshot directory must be set.");
-       }
-       File snapshotDir = new File(snapshotDirectory);
-       if (!snapshotDir.exists()) {
-    	   snapshotDir.mkdir();
-       }
-       
-       String currentSnapshotDir = null;
+       String snapshotName = DatabaseDescriptor.getSnapshotDirectory() + File.separator + System.currentTimeMillis();
        if (clientSuppliedName != null && !clientSuppliedName.equals("")) {
-           currentSnapshotDir = snapshotDirectory + System.getProperty("file.separator") + System.currentTimeMillis() + "-" + clientSuppliedName;
-       }
-       else
-       {
-           currentSnapshotDir = snapshotDirectory + System.getProperty("file.separator") + System.currentTimeMillis();
-       }
-       File snapshotTagDirectory = new File(currentSnapshotDir);
-       if (!snapshotTagDirectory.exists()) {
-    	   snapshotTagDirectory.mkdir();
+           snapshotName = snapshotName + "-" + clientSuppliedName;
        }
     
-       // put each CF snapshot under the table directory.
-       currentSnapshotDir = currentSnapshotDir + System.getProperty("file.separator") + table_;
+       File snapshotDirectory = new File(snapshotName, table_);
+       FileUtils.createDirectory(snapshotDirectory.getAbsolutePath());
 
        /* Now take a snapshot of all columnfamily stores */
        Set<String> columnFamilies = tableMetadata_.getColumnFamilies();
@@ -458,14 +441,12 @@ public class Table
             ColumnFamilyStore cfStore = columnFamilyStores_.get(columnFamily);
             if (cfStore != null)
             {
-                cfStore.snapshot(currentSnapshotDir);
+                cfStore.snapshot(snapshotDirectory.getAbsolutePath());
             }
        }
        
        if (logger_.isDebugEnabled()) 
-       {
-    	   logger_.debug("Snapshot for " + table_ + " table put into " + currentSnapshotDir + ".");
-       }
+    	   logger_.debug("Snapshot for " + table_ + " table put into " + snapshotDirectory.getAbsolutePath() + ".");
     }
     
     /*

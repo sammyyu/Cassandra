@@ -227,8 +227,11 @@ public class DatabaseDescriptor
 
             /* snapshot directory */
             snapshotDirectory_ = xmlUtils.getNodeValue("/Storage/SnapshotDirectory");
-            if ( snapshotDirectory_ != null )
-                FileUtils.createDirectory(snapshotDirectory_);
+            if ( snapshotDirectory_ == null ) {
+                throw new ConfigurationException("SnapshotDirectory must be specified");
+            }
+            FileUtils.createDirectory(snapshotDirectory_);
+            
 
             /* data file directory */
             dataFileDirectories_ = xmlUtils.getNodeValues("/Storage/DataFileDirectories/DataFileDirectory");

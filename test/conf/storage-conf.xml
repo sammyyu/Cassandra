@@ -35,6 +35,7 @@
    <CalloutLocation>build/test/cassandra/callouts</CalloutLocation>
    <BootstrapFileDirectory>build/test/cassandra/bootstrap</BootstrapFileDirectory>
    <StagingFileDirectory>build/test/cassandra/staging</StagingFileDirectory>
+   <SnapshotDirectory>build/test/cassandra/snapshot</SnapshotDirectory>
    <CommitLogFastSync>false</CommitLogFastSync>
    <MemtableSizeInMB>1</MemtableSizeInMB>
    <MemtableObjectCountInMillions>0.00002</MemtableObjectCountInMillions> <!-- 20 -->

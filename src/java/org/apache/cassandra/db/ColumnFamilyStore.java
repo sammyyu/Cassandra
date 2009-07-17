@@ -1527,19 +1527,19 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
        if (!snapshotDir.exists()) {
            snapshotDir.mkdir();
        }
-       sstableLock_.writeLock().lock();
+       sstableLock_.readLock().lock();
        List<String> files = new ArrayList<String>(ssTables_.keySet());
        try {
             for (String file : files)
             {
                File f = new File(file);
-               File hardLinkFile = new File(snapshotDirectory + System.getProperty("file.separator") + f.getName());
+               File hardLinkFile = new File(snapshotDirectory + File.separator + f.getName());
                FileUtils.createHardLink(f, hardLinkFile);
             }
         }
         finally
         {
-            sstableLock_.writeLock().unlock();
+            sstableLock_.readLock().unlock();
         }
     }
 

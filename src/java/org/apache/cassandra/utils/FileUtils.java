@@ -273,8 +273,30 @@ public class FileUtils
      * @throws IOException if an error has occurred while creating the link.
      */
     public static void createHardLink(File sourceFile, File destinationFile) throws IOException {
-    	ProcessBuilder pb = new ProcessBuilder("ln", sourceFile.getAbsolutePath(), destinationFile.getAbsolutePath());
-    	pb.start();
+        String osname = System.getProperty("os.name");
+        ProcessBuilder pb;
+        if (osname.startsWith("Windows")) {
+            float osversion = Float.parseFloat(System.getProperty("os.version"));
+            if (osversion >= 6.0f) {
+                pb = new ProcessBuilder("cmd" , "/c", "mklink", "/H", destinationFile.getAbsolutePath(), sourceFile.getAbsolutePath());
+            }
+            else {
+                pb = new ProcessBuilder("fsutil", "hardlink", "create", destinationFile.getAbsolutePath(), sourceFile.getAbsolutePath());
+            }
+        }
+        else {
+            pb = new ProcessBuilder("ln", sourceFile.getAbsolutePath(), destinationFile.getAbsolutePath());
+        }
+        pb.start();
     }
 
+    public static void main(String [] args) {
+        Properties prop = System.getProperties();
+        for (Object key: prop.keySet()) {
+            String property = (String) key;
+            String value = prop.getProperty(property);
+            System.out.println(property + "=" + value);
+            
+        }
+    }
 }

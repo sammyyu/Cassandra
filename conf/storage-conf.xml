@@ -97,15 +97,14 @@
     <!-- Directories: Specify where Cassandra should store different data on disk
          Keep the data disks and the CommitLog disks separate for best performance
     -->
-    <CommitLogDirectory>/var/cassandra/commitlog</CommitLogDirectory>
+    <CommitLogDirectory>C:/cassandra/commitlog</CommitLogDirectory>
     <DataFileDirectories>
-        <DataFileDirectory>/var/cassandra/data</DataFileDirectory>
+        <DataFileDirectory>C:/cassandra/data</DataFileDirectory>
     </DataFileDirectories>
-    <SnapshotDirectory>/var/cassandra/snapshot</SnapshotDirectory>
-    <CalloutLocation>/var/cassandra/callouts</CalloutLocation>
-    <BootstrapFileDirectory>/var/cassandra/bootstrap</BootstrapFileDirectory>
-    <StagingFileDirectory>/var/cassandra/staging</StagingFileDirectory>
-
+    <CalloutLocation>C:/cassandra/callouts</CalloutLocation>
+    <BootstrapFileDirectory>C:/cassandra/bootstrap</BootstrapFileDirectory>
+    <SnapshotDirectory>C:/cassandra/snapshot</SnapshotDirectory>
+    <StagingFileDirectory>C:/cassandra/staging</StagingFileDirectory>
 
     <!-- Addresses of hosts that are deemed contact points. Cassandra nodes use
          this list of hosts to find each other and learn the topology of the ring.
@@ -173,4 +172,24 @@
          face of hardware failures.  The default value is ten days.
     -->
     <GCGraceSeconds>864000</GCGraceSeconds>
+
+
+    <!--======================================================================-->
+    <!-- OPTIONAL                                                             -->
+    <!--======================================================================-->
+    <!-- This final section contains configuration information for optional
+         and experimental features in Cassandra that are not yet fully functional.
+         Basic features in Cassandra should work fine without configuring this section.
+    -->
+    <ZookeeperAddress>127.0.0.1</ZookeeperAddress>
 </Storage>
+<!--
+    <Tables>
+        <Table Name="items">
+            <ColumnFamily ColumnSort="Name" Name="base"/>
+            <ColumnFamily ColumnSort="Name" Name="diggs" ColumnType="Super"/>
+            <ColumnFamily ColumnSort="Name" Name="buries" ColumnType="Super"/>
+            <ColumnFamily ColumnSort="Name" Name="comments" ColumnType="Super"/>
+        </Table>
+    </Tables>
+-->
