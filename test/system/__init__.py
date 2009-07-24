@@ -30,7 +30,7 @@ _ipath = os.path.join(root, 'interface', 'gen-py')
 sys.path.append(os.path.join(_ipath, 'cassandra'))
 import Cassandra
 
-host, port = '127.0.0.1', 9160
+host, port = '127.0.0.1', 9170
 def get_client():
     socket = TSocket.TSocket(host, port)
     transport = TTransport.TBufferedTransport(socket)
@@ -42,8 +42,7 @@ def get_client():
 client = get_client()
 
 
-import tempfile
-_, pid_fname = tempfile.mkstemp()
+pid_fname = "system_test.pid"
 def pid():
     return int(open(pid_fname).read())
 
@@ -55,6 +54,11 @@ class CassandraTester(object):
 
     def setUp(self):
         if self.runserver:
+            if os.path.exists(pid_fname):
+                pid_path = os.path.join(root, pid_fname)
+                print "Unclean shutdown detected, (%s found)" % pid_path
+                sys.exit()
+
             # clean out old stuff
             import shutil
             # todo get directories from conf/storage-conf.xml
@@ -68,12 +72,12 @@ class CassandraTester(object):
             os.chdir(root)
             os.environ['CASSANDRA_INCLUDE'] = 'test/cassandra.in.sh'
             args = ['bin/cassandra', '-p', pid_fname]
-            sp.Popen(args, stderr=sp.PIPE, stdout=sp.PIPE)
+            process = sp.Popen(args, stderr=sp.PIPE, stdout=sp.PIPE)
             time.sleep(0.1)
 
             # connect to it, with a timeout in case something went wrong
             start = time.time()
-            while time.time() < start + 20:
+            while time.time() < start + 10:
                 try:
                     client.transport.open()
                 except:
@@ -81,8 +85,16 @@ class CassandraTester(object):
                 else:
                     break
             else:
-                os.kill(pid(), signal.SIGKILL) # just in case
                 print "Couldn't connect to server; aborting regression test"
+                # see if process is still alive
+                process.poll()
+                
+                if process.returncode is None:
+                    os.kill(pid(), signal.SIGKILL) # just in case
+                else:
+                    stdout_value, stderr_value = process.communicate()
+                    print "Stdout: %s" % (stdout_value)
+                    print "Stderr: %s" % (stderr_value)
                 sys.exit()
         else:
             client.transport.open()
@@ -95,3 +107,5 @@ class CassandraTester(object):
             # TODO kill server with SIGKILL if it's still alive
             time.sleep(0.5)
             # TODO assert server is Truly Dead
+
+# vim:ai sw=4 ts=4 tw=0 et

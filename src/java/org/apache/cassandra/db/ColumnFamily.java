@@ -23,20 +23,24 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentSkipListMap;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Logger;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.io.ICompactSerializer;
+import org.apache.cassandra.db.filter.QueryPath;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.MarshalException;
+import org.apache.cassandra.db.marshal.LongType;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -44,12 +48,11 @@ import org.apache.cassandra.utils.FBUtilities;
 public final class ColumnFamily
 {
     /* The column serializer for this Column Family. Create based on config. */
-    private static ICompactSerializer2<ColumnFamily> serializer_;
+    private static ICompactSerializer<ColumnFamily> serializer_;
     public static final short utfPrefix_ = 2;   
 
     private static Logger logger_ = Logger.getLogger( ColumnFamily.class );
     private static Map<String, String> columnTypes_ = new HashMap<String, String>();
-    private static Map<String, String> indexTypes_ = new HashMap<String, String>();
     private String type_;
     private String table_;
 
@@ -59,12 +62,9 @@ public final class ColumnFamily
         /* TODO: These are the various column types. Hard coded for now. */
         columnTypes_.put("Standard", "Standard");
         columnTypes_.put("Super", "Super");
-
-        indexTypes_.put("Name", "Name");
-        indexTypes_.put("Time", "Time");
     }
 
-    public static ICompactSerializer2<ColumnFamily> serializer()
+    public static ICompactSerializer<ColumnFamily> serializer()
     {
         return serializer_;
     }
@@ -73,9 +73,9 @@ public final class ColumnFamily
      * This method returns the serializer whose methods are
      * preprocessed by a dynamic proxy.
     */
-    public static ICompactSerializer2<ColumnFamily> serializerWithIndexes()
+    public static ICompactSerializer<ColumnFamily> serializerWithIndexes()
     {
-        return (ICompactSerializer2<ColumnFamily>)Proxy.newProxyInstance( ColumnFamily.class.getClassLoader(), new Class[]{ICompactSerializer2.class}, new CompactSerializerInvocationHandler<ColumnFamily>(serializer_) );
+        return (ICompactSerializer<ColumnFamily>)Proxy.newProxyInstance( ColumnFamily.class.getClassLoader(), new Class[]{ICompactSerializer.class}, new CompactSerializerInvocationHandler<ColumnFamily>(serializer_) );
     }
 
     public static String getColumnType(String key)
@@ -85,66 +85,47 @@ public final class ColumnFamily
     	return columnTypes_.get(key);
     }
 
-    public static String getColumnSortProperty(String columnIndexProperty)
-    {
-    	if ( columnIndexProperty == null )
-    		return indexTypes_.get("Time");
-        return indexTypes_.get(columnIndexProperty);
-    }
-
     public static ColumnFamily create(String tableName, String cfName)
     {
-        Comparator<IColumn> comparator;
         String columnType = DatabaseDescriptor.getColumnFamilyType(tableName, cfName);
-        if (DatabaseDescriptor.isNameSortingEnabled(tableName, cfName))
-        {
-            comparator = ColumnComparatorFactory.getComparator(ColumnComparatorFactory.ComparatorType.NAME);
-        }
-        /* if this columnfamily has simple columns, and no index on name sort by timestamp */
-        else
-        {
-            comparator = ColumnComparatorFactory.getComparator(ColumnComparatorFactory.ComparatorType.TIMESTAMP);
-        }
-        return new ColumnFamily(cfName, columnType, comparator);
+        AbstractType comparator = DatabaseDescriptor.getComparator(tableName, cfName);
+        AbstractType subcolumnComparator = DatabaseDescriptor.getSubComparator(tableName, cfName);
+        return new ColumnFamily(cfName, columnType, comparator, subcolumnComparator);
     }
-
-    private transient AbstractColumnFactory columnFactory_;
 
     private String name_;
 
-    private transient ICompactSerializer2<IColumn> columnSerializer_;
+    private transient ICompactSerializer<IColumn> columnSerializer_;
     private long markedForDeleteAt = Long.MIN_VALUE;
     private int localDeletionTime = Integer.MIN_VALUE;
     private AtomicInteger size_ = new AtomicInteger(0);
-    private EfficientBidiMap columns_;
+    private ConcurrentSkipListMap<byte[], IColumn> columns_;
 
-    public ColumnFamily(String cfName, String columnType, Comparator<IColumn> comparator)
+    public ColumnFamily(String cfName, String columnType, AbstractType comparator, AbstractType subcolumnComparator)
     {
         name_ = cfName;
         type_ = columnType;
-        columnFactory_ = AbstractColumnFactory.getColumnFactory(columnType);
-        columnSerializer_ = columnFactory_.createColumnSerializer();
-        if(columns_ == null)
-            columns_ = new EfficientBidiMap(comparator);
+        columnSerializer_ = columnType.equals("Standard") ? Column.serializer() : SuperColumn.serializer(subcolumnComparator);
+        columns_ = new ConcurrentSkipListMap<byte[], IColumn>(comparator);
     }
 
-    public ColumnFamily(String cfName, String columnType, ColumnComparatorFactory.ComparatorType indexType)
+    public ColumnFamily cloneMeShallow()
     {
-        this(cfName, columnType, ColumnComparatorFactory.getComparator(indexType));
-    }
-
-    ColumnFamily cloneMeShallow()
-    {
-        ColumnFamily cf = new ColumnFamily(name_, type_, getComparator());
+        ColumnFamily cf = new ColumnFamily(name_, type_, getComparator(), getSubComparator());
         cf.markedForDeleteAt = markedForDeleteAt;
         cf.localDeletionTime = localDeletionTime;
         return cf;
     }
 
+    private AbstractType getSubComparator()
+    {
+        return (columnSerializer_ instanceof SuperColumnSerializer) ? ((SuperColumnSerializer)columnSerializer_).getComparator() : null;
+    }
+
     ColumnFamily cloneMe()
     {
         ColumnFamily cf = cloneMeShallow();
-        cf.columns_ = columns_.cloneMe();
+        cf.columns_ = columns_.clone();
     	return cf;
     }
 
@@ -159,41 +140,31 @@ public final class ColumnFamily
     */
     void addColumns(ColumnFamily cf)
     {
-        for (IColumn column : cf.getAllColumns())
+        for (IColumn column : cf.getSortedColumns())
         {
             addColumn(column);
         }
     }
 
-    public ICompactSerializer2<IColumn> getColumnSerializer()
+    public ICompactSerializer<IColumn> getColumnSerializer()
     {
     	return columnSerializer_;
-    }
-
-    public void addColumn(String name)
-    {
-    	addColumn(columnFactory_.createColumn(name));
     }
 
     int getColumnCount()
     {
     	int count = 0;
-    	Map<String, IColumn> columns = columns_.getColumns();
-    	if( columns != null )
-    	{
-    		if(!isSuper())
-    		{
-    			count = columns.size();
-    		}
-    		else
-    		{
-    			Collection<IColumn> values = columns.values();
-		    	for(IColumn column: values)
-		    	{
-		    		count += column.getObjectCount();
-		    	}
-    		}
-    	}
+        if(!isSuper())
+        {
+            count = columns_.size();
+        }
+        else
+        {
+            for(IColumn column: columns_.values())
+            {
+                count += column.getObjectCount();
+            }
+        }
     	return count;
     }
 
@@ -202,26 +173,47 @@ public final class ColumnFamily
         return type_.equals("Super");
     }
 
-    public void addColumn(String name, byte[] value)
+    public void addColumn(QueryPath path, byte[] value, long timestamp)
     {
-    	addColumn(name, value, 0);
+        addColumn(path, value, timestamp, false);
     }
 
-    public void addColumn(String name, byte[] value, long timestamp)
-    {
-        addColumn(name, value, timestamp, false);
-    }
-
-    public void addColumn(String name, byte[] value, long timestamp, boolean deleted)
+    /** In most places the CF must be part of a QueryPath but here it is ignored. */
+    public void addColumn(QueryPath path, byte[] value, long timestamp, boolean deleted)
 	{
-		IColumn column = columnFactory_.createColumn(name, value, timestamp, deleted);
+        assert path.columnName != null : path;
+		IColumn column;
+        if (path.superColumnName == null)
+        {
+            try
+            {
+                getComparator().validate(path.columnName);
+            }
+            catch (Exception e)
+            {
+                throw new MarshalException("Invalid column name in " + path.columnFamilyName + " for " + getComparator().getClass().getName());
+            }
+            column = new Column(path.columnName, value, timestamp, deleted);
+        }
+        else
+        {
+            assert isSuper();
+            try
+            {
+                getComparator().validate(path.superColumnName);
+            }
+            catch (Exception e)
+            {
+                throw new MarshalException("Invalid supercolumn name in " + path.columnFamilyName + " for " + getComparator().getClass().getName());
+            }
+            column = new SuperColumn(path.superColumnName, getSubComparator());
+            column.addColumn(new Column(path.columnName, value, timestamp, deleted)); // checks subcolumn name
+        }
 		addColumn(column);
     }
 
-    void clear()
+    public void clear()
     {
-        if (logger_.isDebugEnabled())
-          logger_.debug("clearing");
     	columns_.clear();
     	size_.set(0);
     }
@@ -230,9 +222,9 @@ public final class ColumnFamily
      * If we find an old column that has the same name
      * the ask it to resolve itself else add the new column .
     */
-    void addColumn(IColumn column)
+    public void addColumn(IColumn column)
     {
-        String name = column.name();
+        byte[] name = column.name();
         IColumn oldColumn = columns_.get(name);
         if (oldColumn != null)
         {
@@ -258,22 +250,27 @@ public final class ColumnFamily
         }
     }
 
-    public IColumn getColumn(String name)
+    public IColumn getColumn(byte[] name)
     {
-        return columns_.get( name );
+        return columns_.get(name);
     }
 
-    public SortedSet<IColumn> getAllColumns()
+    public SortedSet<byte[]> getColumnNames()
     {
-        return columns_.getSortedColumns();
+        return columns_.keySet();
     }
 
-    public Map<String, IColumn> getColumns()
+    public Collection<IColumn> getSortedColumns()
     {
-        return columns_.getColumns();
+        return columns_.values();
     }
 
-    public void remove(String columnName)
+    public Map<byte[], IColumn> getColumnsMap()
+    {
+        return columns_;
+    }
+
+    public void remove(byte[] columnName)
     {
     	columns_.remove(columnName);
     }
@@ -295,17 +292,13 @@ public final class ColumnFamily
         return markedForDeleteAt > Long.MIN_VALUE;
     }
 
-    public String getTable() {
-        return table_;
-    }
-
     /*
      * This function will calculate the difference between 2 column families.
      * The external input is assumed to be a superset of internal.
      */
     ColumnFamily diff(ColumnFamily cfComposite)
     {
-    	ColumnFamily cfDiff = new ColumnFamily(cfComposite.name(), cfComposite.type_, getComparator());
+    	ColumnFamily cfDiff = new ColumnFamily(cfComposite.name(), cfComposite.type_, getComparator(), getSubComparator());
         if (cfComposite.getMarkedForDeleteAt() > getMarkedForDeleteAt())
         {
             cfDiff.delete(cfComposite.getLocalDeletionTime(), cfComposite.getMarkedForDeleteAt());
@@ -314,52 +307,44 @@ public final class ColumnFamily
         // (don't need to worry about cfNew containing IColumns that are shadowed by
         // the delete tombstone, since cfNew was generated by CF.resolve, which
         // takes care of those for us.)
-        Map<String, IColumn> columns = cfComposite.getColumns();
-        Set<String> cNames = columns.keySet();
-        for ( String cName : cNames )
+        Map<byte[], IColumn> columns = cfComposite.getColumnsMap();
+        Set<byte[]> cNames = columns.keySet();
+        for (byte[] cName : cNames)
         {
-        	IColumn columnInternal = columns_.get(cName);
-        	IColumn columnExternal = columns.get(cName);
-        	if( columnInternal == null )
-        	{
-        		cfDiff.addColumn(columnExternal);
-        	}
-        	else
-        	{
-            	IColumn columnDiff = columnInternal.diff(columnExternal);
-        		if(columnDiff != null)
-        		{
-        			cfDiff.addColumn(columnDiff);
-        		}
-        	}
+            IColumn columnInternal = columns_.get(cName);
+            IColumn columnExternal = columns.get(cName);
+            if (columnInternal == null)
+            {
+                cfDiff.addColumn(columnExternal);
+            }
+            else
+            {
+                IColumn columnDiff = columnInternal.diff(columnExternal);
+                if (columnDiff != null)
+                {
+                    cfDiff.addColumn(columnDiff);
+                }
+            }
         }
 
-        if (!cfDiff.getColumns().isEmpty() || cfDiff.isMarkedForDelete())
+        if (!cfDiff.getColumnsMap().isEmpty() || cfDiff.isMarkedForDelete())
         	return cfDiff;
         else
         	return null;
     }
 
-    private Comparator<IColumn> getComparator()
+    public AbstractType getComparator()
     {
-        return columns_.getComparator();
-    }
-
-    public ColumnComparatorFactory.ComparatorType getComparatorType()
-    {
-        return getComparator() == ColumnComparatorFactory.nameComparator_
-               ? ColumnComparatorFactory.ComparatorType.NAME
-               : ColumnComparatorFactory.ComparatorType.TIMESTAMP;
+        return (AbstractType)columns_.comparator();
     }
 
     int size()
     {
-        if ( size_.get() == 0 )
+        if (size_.get() == 0)
         {
-            Set<String> cNames = columns_.getColumns().keySet();
-            for ( String cName : cNames )
+            for (IColumn column : columns_.values())
             {
-                size_.addAndGet(columns_.get(cName).size());
+                size_.addAndGet(column.size());
             }
         }
         return size_.get();
@@ -389,7 +374,7 @@ public final class ColumnFamily
         }
 
     	sb.append(" [");
-        sb.append(StringUtils.join(getAllColumns(), ", "));
+        sb.append(getComparator().getColumnsString(getSortedColumns()));
         sb.append("])");
 
     	return sb.toString();
@@ -397,20 +382,19 @@ public final class ColumnFamily
 
     public byte[] digest()
     {
-    	Set<IColumn> columns = columns_.getSortedColumns();
-    	byte[] xorHash = ArrayUtils.EMPTY_BYTE_ARRAY;
-        for(IColumn column : columns)
-    	{
-    		if(xorHash.length == 0)
-    		{
-    			xorHash = column.digest();
-    		}
-    		else
-    		{
+        byte[] xorHash = ArrayUtils.EMPTY_BYTE_ARRAY;
+        for (IColumn column : columns_.values())
+        {
+            if (xorHash.length == 0)
+            {
+                xorHash = column.digest();
+            }
+            else
+            {
                 xorHash = FBUtilities.xor(xorHash, column.digest());
-    		}
-    	}
-    	return xorHash;
+            }
+        }
+        return xorHash;
     }
 
     public long getMarkedForDeleteAt()
@@ -449,7 +433,7 @@ public final class ColumnFamily
         return cf;
     }
 
-    public static class ColumnFamilySerializer implements ICompactSerializer2<ColumnFamily>
+    public static class ColumnFamilySerializer implements ICompactSerializer<ColumnFamily>
     {
         /*
          * We are going to create indexes, and write out that information as well. The format
@@ -477,11 +461,15 @@ public final class ColumnFamily
         */
         public void serialize(ColumnFamily columnFamily, DataOutputStream dos) throws IOException
         {
-            Collection<IColumn> columns = columnFamily.getAllColumns();
+            // TODO whenever we change this we need to change the code in SequenceFile to match in two places.
+            // This SUCKS and is inefficient to boot.  let's fix this ASAP. 
+            Collection<IColumn> columns = columnFamily.getSortedColumns();
 
             dos.writeUTF(columnFamily.name());
             dos.writeUTF(columnFamily.type_);
-            dos.writeInt(columnFamily.getComparatorType().ordinal());
+            dos.writeUTF(columnFamily.getComparator().getClass().getCanonicalName());
+            AbstractType subcolumnComparator = columnFamily.getSubComparator();
+            dos.writeUTF(subcolumnComparator == null ? "" : subcolumnComparator.getClass().getCanonicalName());
             dos.writeInt(columnFamily.localDeletionTime);
             dos.writeLong(columnFamily.markedForDeleteAt);
 
@@ -492,22 +480,13 @@ public final class ColumnFamily
             }
         }
 
-        /*
-         * Use this method to create a bare bones Column Family. This column family
-         * does not have any of the Column information.
-        */
-        private ColumnFamily defreezeColumnFamily(DataInputStream dis) throws IOException
+        public ColumnFamily deserialize(DataInputStream dis) throws IOException
         {
             ColumnFamily cf = new ColumnFamily(dis.readUTF(),
                                                dis.readUTF(),
-                                               ColumnComparatorFactory.ComparatorType.values()[dis.readInt()]);
+                                               readComparator(dis),
+                                               readComparator(dis));
             cf.delete(dis.readInt(), dis.readLong());
-            return cf;
-        }
-
-        public ColumnFamily deserialize(DataInputStream dis) throws IOException
-        {
-            ColumnFamily cf = defreezeColumnFamily(dis);
             int size = dis.readInt();
             IColumn column;
             for (int i = 0; i < size; ++i)
@@ -518,61 +497,27 @@ public final class ColumnFamily
             return cf;
         }
 
-        /*
-         * This version of deserialize is used when we need a specific set if columns for
-         * a column family specified in the name cfName parameter.
-        */
-        public ColumnFamily deserialize(DataInputStream dis, IFilter filter) throws IOException
+        private AbstractType readComparator(DataInputStream dis) throws IOException
         {
-            ColumnFamily cf = defreezeColumnFamily(dis);
-            int size = dis.readInt();
-            IColumn column = null;
-            for ( int i = 0; i < size; ++i )
+            String className = dis.readUTF();
+            if (className.equals(""))
             {
-                column = cf.getColumnSerializer().deserialize(dis, filter);
-                if(column != null)
-                {
-                    cf.addColumn(column);
-                }
+                return null;
             }
-            return cf;
-        }
 
-        /*
-         * Deserialize a particular column or super column or the entire columnfamily given a : seprated name
-         * name could be of the form cf:superColumn:column  or cf:column or cf
-         */
-        public ColumnFamily deserialize(DataInputStream dis, String name, IFilter filter) throws IOException
-        {
-            String[] names = RowMutation.getColumnAndColumnFamily(name);
-            String columnName = "";
-            if ( names.length == 1 )
-                return deserialize(dis, filter);
-            if( names.length == 2 )
-                columnName = names[1];
-            if( names.length == 3 )
-                columnName = names[1]+ ":" + names[2];
-
-            ColumnFamily cf = defreezeColumnFamily(dis);
-            /* read the number of columns */
-            int size = dis.readInt();
-            for ( int i = 0; i < size; ++i )
+            try
             {
-                IColumn column = cf.getColumnSerializer().deserialize(dis, columnName, filter);
-                if ( column != null )
-                {
-                    cf.addColumn(column);
-                    break;
-                }
+                return (AbstractType)Class.forName(className).getConstructor().newInstance();
             }
-            return cf;
-        }
-
-        public void skip(DataInputStream dis) throws IOException
-        {
-            throw new UnsupportedOperationException("This operation is not yet supported.");
+            catch (ClassNotFoundException e)
+            {
+                throw new RuntimeException("Unable to load comparator class '" + className + "'.  probably this means you have obsolete sstables lying around", e);
+            }
+            catch (Exception e)
+            {
+                throw new RuntimeException(e);
+            }
         }
     }
-
 }
 

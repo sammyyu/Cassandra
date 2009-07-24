@@ -23,14 +23,17 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.List;
+import java.io.UnsupportedEncodingException;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.cql.execution.RuntimeErrorMsg;
 import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.filter.QueryPath;
 import org.apache.cassandra.service.StorageProxy;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.LogUtil;
 import org.apache.log4j.Logger;
+import org.apache.commons.lang.ArrayUtils;
 
 /**
  * A Row Source Defintion (RSD) for doing a range query on a column map
@@ -42,7 +45,6 @@ public class ColumnRangeQueryRSD extends RowSourceDef
     private CFMetaData cfMetaData_;
     private OperandDef rowKey_;
     private OperandDef superColumnKey_;
-    private int        offset_;
     private int        limit_;
 
     /**
@@ -52,12 +54,11 @@ public class ColumnRangeQueryRSD extends RowSourceDef
      * Note: "limit" of -1 is the equivalent of no limit.
      *       "offset" specifies the number of rows to skip. An offset of 0 implies from the first row.
      */
-    public ColumnRangeQueryRSD(CFMetaData cfMetaData, OperandDef rowKey, int offset, int limit)
+    public ColumnRangeQueryRSD(CFMetaData cfMetaData, OperandDef rowKey, int limit)
     {
         cfMetaData_     = cfMetaData;
         rowKey_         = rowKey;
         superColumnKey_ = null;
-        offset_         = offset;
         limit_          = limit;
     }
 
@@ -68,36 +69,34 @@ public class ColumnRangeQueryRSD extends RowSourceDef
      * Note: "limit" of -1 is the equivalent of no limit.
      *       "offset" specifies the number of rows to skip. An offset of 0 implies the first row.  
      */
-    public ColumnRangeQueryRSD(CFMetaData cfMetaData, ConstantOperand rowKey, ConstantOperand superColumnKey,
-                               int offset, int limit)
+    public ColumnRangeQueryRSD(CFMetaData cfMetaData, ConstantOperand rowKey, ConstantOperand superColumnKey, int limit)
     {
         cfMetaData_     = cfMetaData;
         rowKey_         = rowKey;
         superColumnKey_ = superColumnKey;
-        offset_         = offset;
         limit_          = limit;
     }
 
-    public List<Map<String,String>> getRows()
+    public List<Map<String,String>> getRows() throws UnsupportedEncodingException
     {
-        String columnFamily_column;
-        String superColumnKey = null;      
+        QueryPath path;
+        String superColumnKey = null;
 
         if (superColumnKey_ != null)
         {
             superColumnKey = (String)(superColumnKey_.get());
-            columnFamily_column = cfMetaData_.cfName + ":" + superColumnKey;
+            path = new QueryPath(cfMetaData_.cfName, superColumnKey.getBytes("UTF-8"));
         }
         else
         {
-            columnFamily_column = cfMetaData_.cfName;
+            path = new QueryPath(cfMetaData_.cfName);
         }
 
         Row row = null;
         try
         {
             String key = (String)(rowKey_.get());
-            ReadCommand readCommand = new SliceFromReadCommand(cfMetaData_.tableName, key, columnFamily_column, "", "", true, offset_, limit_);
+            ReadCommand readCommand = new SliceFromReadCommand(cfMetaData_.tableName, key, path, ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, limit_);
             row = StorageProxy.readProtocol(readCommand, StorageService.ConsistencyLevel.WEAK);
         }
         catch (Exception e)
@@ -116,13 +115,13 @@ public class ColumnRangeQueryRSD extends RowSourceDef
                 if (superColumnKey_ != null)
                 {
                     // this is the super column case
-                    IColumn column = cfamily.getColumn(superColumnKey);
+                    IColumn column = cfamily.getColumn(superColumnKey.getBytes("UTF-8"));
                     if (column != null)
                         columns = column.getSubColumns();
                 }
                 else
                 {
-                    columns = cfamily.getAllColumns();
+                    columns = cfamily.getSortedColumns();
                 }
 
                 if (columns != null && columns.size() > 0)
@@ -131,7 +130,7 @@ public class ColumnRangeQueryRSD extends RowSourceDef
                     {
                         Map<String, String> result = new HashMap<String, String>();
 
-                        result.put(cfMetaData_.n_columnKey, column.name());
+                        result.put(cfMetaData_.n_columnKey, new String(column.name(), "UTF-8"));
                         result.put(cfMetaData_.n_columnValue, new String(column.value()));
                         result.put(cfMetaData_.n_columnTimestamp, Long.toString(column.timestamp()));
 
@@ -150,7 +149,6 @@ public class ColumnRangeQueryRSD extends RowSourceDef
                 "  Column Family:    %s\n" +
                 "  RowKey:           %s\n" +
                 "%s"                   +
-                "  Offset:           %d\n" +
                 "  Limit:            %d\n" +
                 "  Order By:         %s",
                 cfMetaData_.columnType,
@@ -158,7 +156,7 @@ public class ColumnRangeQueryRSD extends RowSourceDef
                 cfMetaData_.cfName,
                 rowKey_.explain(),
                 (superColumnKey_ == null) ? "" : "  SuperColumnKey:   " + superColumnKey_.explain() + "\n",
-                offset_, limit_,
-                cfMetaData_.indexProperty_);
+                limit_,
+                cfMetaData_.comparator);
     }
 }

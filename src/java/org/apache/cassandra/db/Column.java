@@ -18,15 +18,12 @@
 
 package org.apache.cassandra.db;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.Collection;
 import java.nio.ByteBuffer;
 
 import org.apache.commons.lang.ArrayUtils;
 
-import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.db.marshal.AbstractType;
 
 
 /**
@@ -46,27 +43,27 @@ public final class Column implements IColumn
         return serializer_;
     }
 
-    private final String name;
+    private final byte[] name;
     private final byte[] value;
     private final long timestamp;
     private final boolean isMarkedForDelete;
 
-    Column(String name)
+    Column(byte[] name)
     {
         this(name, ArrayUtils.EMPTY_BYTE_ARRAY);
     }
 
-    Column(String name, byte[] value)
+    Column(byte[] name, byte[] value)
     {
         this(name, value, 0);
     }
 
-    Column(String name, byte[] value, long timestamp)
+    public Column(byte[] name, byte[] value, long timestamp)
     {
         this(name, value, timestamp, false);
     }
 
-    Column(String name, byte[] value, long timestamp, boolean isDeleted)
+    public Column(byte[] name, byte[] value, long timestamp, boolean isDeleted)
     {
         assert name != null;
         assert value != null;
@@ -76,12 +73,12 @@ public final class Column implements IColumn
         isMarkedForDelete = isDeleted;
     }
 
-    public String name()
+    public byte[] name()
     {
         return name;
     }
 
-    public IColumn getSubColumn(String columnName)
+    public Column getSubColumn(byte[] columnName)
     {
         throw new UnsupportedOperationException("This operation is unsupported on simple columns.");
     }
@@ -91,7 +88,7 @@ public final class Column implements IColumn
         return value;
     }
 
-    public byte[] value(String key)
+    public byte[] value(byte[] key)
     {
         throw new UnsupportedOperationException("This operation is unsupported on simple columns.");
     }
@@ -111,7 +108,7 @@ public final class Column implements IColumn
         return timestamp;
     }
 
-    public long timestamp(String key)
+    public long timestamp(byte[] key)
     {
         throw new UnsupportedOperationException("This operation is unsupported on simple columns.");
     }
@@ -145,7 +142,7 @@ public final class Column implements IColumn
            * We store the string as UTF-8 encoded, so when we calculate the length, it
            * should be converted to UTF-8.
            */
-        return IColumn.UtfPrefix_ + FBUtilities.getUTF8Length(name) + DBConstants.boolSize_ + DBConstants.tsSize_ + DBConstants.intSize_ + value.length;
+        return IColumn.UtfPrefix_ + name.length + DBConstants.boolSize_ + DBConstants.tsSize_ + DBConstants.intSize_ + value.length;
     }
 
     /*
@@ -169,19 +166,6 @@ public final class Column implements IColumn
             return column;
         }
         return null;
-    }
-
-    public String toString()
-    {
-        StringBuilder sb = new StringBuilder();
-        sb.append(name);
-        sb.append(":");
-        sb.append(isMarkedForDelete());
-        sb.append(":");
-        sb.append(value().length);
-        sb.append("@");
-        sb.append(timestamp());
-        return sb.toString();
     }
 
     public byte[] digest()
@@ -209,94 +193,18 @@ public final class Column implements IColumn
         }
         return timestamp - o.timestamp;
     }
-}
 
-class ColumnSerializer implements ICompactSerializer2<IColumn>
-{
-    public void serialize(IColumn column, DataOutputStream dos) throws IOException
+    public String getString(AbstractType comparator)
     {
-        dos.writeUTF(column.name());
-        dos.writeBoolean(column.isMarkedForDelete());
-        dos.writeLong(column.timestamp());
-        dos.writeInt(column.value().length);
-        dos.write(column.value());
-    }
-
-    private IColumn defreeze(DataInputStream dis, String name) throws IOException
-    {
-        IColumn column = null;
-        boolean delete = dis.readBoolean();
-        long ts = dis.readLong();
-        int size = dis.readInt();
-        byte[] value = new byte[size];
-        dis.readFully(value);
-        column = new Column(name, value, ts, delete);
-        return column;
-    }
-
-    public IColumn deserialize(DataInputStream dis) throws IOException
-    {
-        String name = dis.readUTF();
-        return defreeze(dis, name);
-    }
-
-    /**
-     * Here we need to get the column and apply the filter.
-     */
-    public IColumn deserialize(DataInputStream dis, IFilter filter) throws IOException
-    {
-        assert dis.available() > 0;
-
-        String name = dis.readUTF();
-        IColumn column = new Column(name);
-        column = filter.filter(column, dis);
-        if ( column != null )
-        {
-            column = defreeze(dis, name);
-        }
-        else
-        {
-        	/* Skip a boolean and the timestamp */
-        	dis.skip(DBConstants.boolSize_ + DBConstants.tsSize_);
-            int size = dis.readInt();
-            dis.skip(size);
-        }
-        return column;
-    }
-
-    /**
-     * We know the name of the column here so just return it.
-     * Filter is pretty much useless in this call and is ignored.
-     */
-    public IColumn deserialize(DataInputStream dis, String columnName, IFilter filter) throws IOException
-    {
-        assert dis.available() > 0;
-        IColumn column = null;
-        String name = dis.readUTF();
-        if ( name.equals(columnName) )
-        {
-            column = defreeze(dis, name);
-        }
-        else
-        {
-        	/* Skip a boolean and the timestamp */
-        	dis.skip(DBConstants.boolSize_ + DBConstants.tsSize_);
-            int size = dis.readInt();
-            dis.skip(size);
-        }
-        return column;
-    }
-
-    public void skip(DataInputStream dis) throws IOException
-    {
-    	/* read the column name */
-        dis.readUTF();
-        /* boolean indicating if the column is deleted */
-        dis.readBoolean();
-        /* timestamp associated with the column */
-        dis.readLong();
-        /* size of the column */
-        int size = dis.readInt();
-        dis.skip(size);
+        StringBuilder sb = new StringBuilder();
+        sb.append(comparator.getString(name));
+        sb.append(":");
+        sb.append(isMarkedForDelete());
+        sb.append(":");
+        sb.append(value.length);
+        sb.append("@");
+        sb.append(timestamp());
+        return sb.toString();
     }
 }
+

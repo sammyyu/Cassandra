@@ -21,35 +21,42 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import org.apache.cassandra.db.filter.QueryPath;
+import org.apache.cassandra.db.filter.SliceQueryFilter;
+import org.apache.cassandra.service.ColumnParent;
+
 public class SliceFromReadCommand extends ReadCommand
 {
-    public final String columnFamilyColumn;
-    public final String start, finish;
+    public final QueryPath column_parent;
+    public final byte[] start, finish;
     public final boolean isAscending;
-    public final int offset;
     public final int count;
 
-    public SliceFromReadCommand(String table, String key, String columnFamilyColumn, String start, String finish, boolean isAscending, int offset, int count)
+    public SliceFromReadCommand(String table, String key, ColumnParent column_parent, byte[] start, byte[] finish, boolean isAscending, int count)
     {
-        super(table, key, CMD_TYPE_GET_SLICE_FROM);
-        this.columnFamilyColumn = columnFamilyColumn;
+        this(table, key, new QueryPath(column_parent), start, finish, isAscending, count);
+    }
+
+    public SliceFromReadCommand(String table, String key, QueryPath columnParent, byte[] start, byte[] finish, boolean isAscending, int count)
+    {
+        super(table, key, CMD_TYPE_GET_SLICE);
+        this.column_parent = columnParent;
         this.start = start;
         this.finish = finish;
         this.isAscending = isAscending;
-        this.offset = offset;
         this.count = count;
     }
 
     @Override
     public String getColumnFamilyName()
     {
-        return RowMutation.getColumnAndColumnFamily(columnFamilyColumn)[0];
+        return column_parent.columnFamilyName;
     }
 
     @Override
     public ReadCommand copy()
     {
-        ReadCommand readCommand = new SliceFromReadCommand(table, key, columnFamilyColumn, start, finish, isAscending, offset, count);
+        ReadCommand readCommand = new SliceFromReadCommand(table, key, column_parent, start, finish, isAscending, count);
         readCommand.setDigestQuery(isDigestQuery());
         return readCommand;
     }
@@ -57,7 +64,7 @@ public class SliceFromReadCommand extends ReadCommand
     @Override
     public Row getRow(Table table) throws IOException
     {
-        return table.getRow(key, columnFamilyColumn, start, finish, isAscending, offset, count);
+        return table.getRow(new SliceQueryFilter(key, column_parent, start, finish, isAscending, count));
     }
 
     @Override
@@ -66,11 +73,10 @@ public class SliceFromReadCommand extends ReadCommand
         return "SliceFromReadCommand(" +
                "table='" + table + '\'' +
                ", key='" + key + '\'' +
-               ", columnFamily='" + columnFamilyColumn + '\'' +
-               ", start='" + start + '\'' +
-               ", finish='" + finish + '\'' +
+               ", column_parent='" + column_parent + '\'' +
+               ", start='" + getComparator().getString(start) + '\'' +
+               ", finish='" + getComparator().getString(finish) + '\'' +
                ", isAscending=" + isAscending +
-               ", offset=" + offset +
                ", count=" + count +
                ')';
     }
@@ -85,11 +91,10 @@ class SliceFromReadCommandSerializer extends ReadCommandSerializer
         dos.writeBoolean(realRM.isDigestQuery());
         dos.writeUTF(realRM.table);
         dos.writeUTF(realRM.key);
-        dos.writeUTF(realRM.columnFamilyColumn);
-        dos.writeUTF(realRM.start);
-        dos.writeUTF(realRM.finish);
+        realRM.column_parent.serialize(dos);
+        ColumnSerializer.writeName(realRM.start, dos);
+        ColumnSerializer.writeName(realRM.finish, dos);
         dos.writeBoolean(realRM.isAscending);
-        dos.writeInt(realRM.offset);
         dos.writeInt(realRM.count);
     }
 
@@ -97,7 +102,13 @@ class SliceFromReadCommandSerializer extends ReadCommandSerializer
     public ReadCommand deserialize(DataInputStream dis) throws IOException
     {
         boolean isDigest = dis.readBoolean();
-        SliceFromReadCommand rm = new SliceFromReadCommand(dis.readUTF(), dis.readUTF(), dis.readUTF(), dis.readUTF(), dis.readUTF(), dis.readBoolean(), dis.readInt(), dis.readInt());
+        SliceFromReadCommand rm = new SliceFromReadCommand(dis.readUTF(),
+                                                           dis.readUTF(),
+                                                           QueryPath.deserialize(dis),
+                                                           ColumnSerializer.readName(dis),
+                                                           ColumnSerializer.readName(dis),
+                                                           dis.readBoolean(), 
+                                                           dis.readInt());
         rm.setDigestQuery(isDigest);
         return rm;
     }

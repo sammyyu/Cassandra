@@ -18,19 +18,13 @@
 
 package org.apache.cassandra.cql.common;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
+import java.io.UnsupportedEncodingException;
 
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.cql.execution.RuntimeErrorMsg;
-import org.apache.cassandra.db.ColumnFamily;
-import org.apache.cassandra.db.ColumnReadCommand;
-import org.apache.cassandra.db.IColumn;
-import org.apache.cassandra.db.Row;
-import org.apache.cassandra.db.ReadCommand;
+import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.filter.QueryPath;
 import org.apache.cassandra.service.StorageProxy;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.LogUtil;
@@ -66,27 +60,27 @@ public class UniqueKeyQueryRSD extends RowSourceDef
     }
 
     // specific column lookup
-    public List<Map<String,String>> getRows() throws RuntimeException
+    public List<Map<String,String>> getRows() throws UnsupportedEncodingException
     {
         String columnKey = (String)(columnKey_.get());
-        String columnFamily_column;
+        QueryPath path = null;
         String superColumnKey = null;
 
         if (superColumnKey_ != null)
         {
             superColumnKey = (String)(superColumnKey_.get());
-            columnFamily_column = cfMetaData_.cfName + ":" + superColumnKey + ":" + columnKey;
+            path = new QueryPath(cfMetaData_.cfName, superColumnKey.getBytes("UTF-8"));
         }
         else
         {
-            columnFamily_column = cfMetaData_.cfName + ":" + columnKey;
+            path = new QueryPath(cfMetaData_.cfName);
         }
 
         Row row = null;
         try
         {
             String key = (String)(rowKey_.get());
-            ReadCommand readCommand = new ColumnReadCommand(cfMetaData_.tableName, key, columnFamily_column);
+            ReadCommand readCommand = new SliceByNamesReadCommand(cfMetaData_.tableName, key, path, Arrays.asList(columnKey.getBytes("UTF-8")));
             row = StorageProxy.readProtocol(readCommand, StorageService.ConsistencyLevel.WEAK);
         }
         catch (Exception e)
@@ -104,13 +98,13 @@ public class UniqueKeyQueryRSD extends RowSourceDef
                 if (superColumnKey_ != null)
                 {
                     // this is the super column case
-                    IColumn column = cfamily.getColumn(superColumnKey);
+                    IColumn column = cfamily.getColumn(superColumnKey.getBytes("UTF-8"));
                     if (column != null)
                         columns = column.getSubColumns();
                 }
                 else
                 {
-                    columns = cfamily.getAllColumns();
+                    columns = cfamily.getSortedColumns();
                 }
 
                 if (columns != null && columns.size() > 0)
@@ -127,7 +121,7 @@ public class UniqueKeyQueryRSD extends RowSourceDef
                         List<Map<String, String>> rows = new LinkedList<Map<String, String>>();
 
                         Map<String, String> result = new HashMap<String, String>();
-                        result.put(cfMetaData_.n_columnKey, column.name());
+                        result.put(cfMetaData_.n_columnKey, new String(column.name(), "UTF-8"));
                         result.put(cfMetaData_.n_columnValue, new String(column.value()));
                         result.put(cfMetaData_.n_columnTimestamp, Long.toString(column.timestamp()));
 

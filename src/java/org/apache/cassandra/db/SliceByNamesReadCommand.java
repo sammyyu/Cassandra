@@ -20,34 +20,44 @@ package org.apache.cassandra.db;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import org.apache.commons.lang.StringUtils;
 
+import org.apache.cassandra.service.ColumnParent;
+import org.apache.cassandra.db.filter.QueryPath;
+import org.apache.cassandra.db.filter.NamesQueryFilter;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.config.DatabaseDescriptor;
+
 public class SliceByNamesReadCommand extends ReadCommand
 {
-    public final String columnFamily;
-    public final List<String> columnNames;
+    public final QueryPath columnParent;
+    public final SortedSet<byte[]> columnNames;
 
-    public SliceByNamesReadCommand(String table, String key, String columnFamily, List<String> columnNames)
+    public SliceByNamesReadCommand(String table, String key, ColumnParent column_parent, Collection<byte[]> columnNames)
+    {
+        this(table, key, new QueryPath(column_parent), columnNames);
+    }
+
+    public SliceByNamesReadCommand(String table, String key, QueryPath path, Collection<byte[]> columnNames)
     {
         super(table, key, CMD_TYPE_GET_SLICE_BY_NAMES);
-        this.columnFamily = columnFamily;
-        this.columnNames = Collections.unmodifiableList(columnNames);
+        this.columnParent = path;
+        this.columnNames = new TreeSet<byte[]>(getComparator());
+        this.columnNames.addAll(columnNames);
     }
 
     @Override
     public String getColumnFamilyName()
     {
-        return RowMutation.getColumnAndColumnFamily(columnFamily)[0];
+        return columnParent.columnFamilyName;
     }
 
     @Override
     public ReadCommand copy()
     {
-        ReadCommand readCommand= new SliceByNamesReadCommand(table, key, columnFamily, columnNames);
+        ReadCommand readCommand= new SliceByNamesReadCommand(table, key, columnParent, columnNames);
         readCommand.setDigestQuery(isDigestQuery());
         return readCommand;
     }
@@ -55,7 +65,7 @@ public class SliceByNamesReadCommand extends ReadCommand
     @Override
     public Row getRow(Table table) throws IOException
     {        
-        return table.getRow(key, columnFamily, columnNames);
+        return table.getRow(new NamesQueryFilter(key, columnParent, columnNames));
     }
 
     @Override
@@ -64,8 +74,8 @@ public class SliceByNamesReadCommand extends ReadCommand
         return "SliceByNamesReadCommand(" +
                "table='" + table + '\'' +
                ", key='" + key + '\'' +
-               ", columnFamily='" + columnFamily + '\'' +
-               ", columns=[" + StringUtils.join(columnNames, ", ") + "]" +
+               ", columnParent='" + columnParent + '\'' +
+               ", columns=[" + getComparator().getString(columnNames) + "]" +
                ')';
     }
 
@@ -80,14 +90,13 @@ class SliceByNamesReadCommandSerializer extends ReadCommandSerializer
         dos.writeBoolean(realRM.isDigestQuery());
         dos.writeUTF(realRM.table);
         dos.writeUTF(realRM.key);
-        dos.writeUTF(realRM.columnFamily);
+        realRM.columnParent.serialize(dos);
         dos.writeInt(realRM.columnNames.size());
         if (realRM.columnNames.size() > 0)
         {
-            for (String cName : realRM.columnNames)
+            for (byte[] cName : realRM.columnNames)
             {
-                dos.writeInt(cName.getBytes().length);
-                dos.write(cName.getBytes());
+                ColumnSerializer.writeName(cName, dos);
             }
         }
     }
@@ -98,17 +107,15 @@ class SliceByNamesReadCommandSerializer extends ReadCommandSerializer
         boolean isDigest = dis.readBoolean();
         String table = dis.readUTF();
         String key = dis.readUTF();
-        String columnFamily = dis.readUTF();
+        QueryPath columnParent = QueryPath.deserialize(dis);
 
         int size = dis.readInt();
-        List<String> columns = new ArrayList<String>();
+        List<byte[]> columns = new ArrayList<byte[]>();
         for (int i = 0; i < size; ++i)
         {
-            byte[] bytes = new byte[dis.readInt()];
-            dis.readFully(bytes);
-            columns.add(new String(bytes));
+            columns.add(ColumnSerializer.readName(dis));
         }
-        SliceByNamesReadCommand rm = new SliceByNamesReadCommand(table, key, columnFamily, columns);
+        SliceByNamesReadCommand rm = new SliceByNamesReadCommand(table, key, columnParent, columns);
         rm.setDigestQuery(isDigest);
         return rm;
     }

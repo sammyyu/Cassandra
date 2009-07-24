@@ -30,7 +30,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
-import org.apache.cassandra.analytics.AnalyticsContext;
 import org.apache.cassandra.concurrent.*;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.*;
@@ -43,7 +42,6 @@ import org.apache.cassandra.tools.MembershipCleanerVerbHandler;
 import org.apache.cassandra.utils.FileUtils;
 import org.apache.cassandra.utils.LogUtil;
 import org.apache.log4j.Logger;
-import org.apache.zookeeper.ZooKeeper;
 
 /*
  * This abstraction contains the token/identifier of this node
@@ -184,8 +182,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     private StorageLoadBalancer storageLoadBalancer_;
     /* We use this interface to determine where replicas need to be placed */
     private IReplicaPlacementStrategy nodePicker_;
-    /* Handle to a ZooKeeper instance */
-    private ZooKeeper zk_;
     
     /*
      * Registers with Management Server
@@ -244,11 +240,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             nodePicker_ = new RackUnawareStrategy(tokenMetadata_, partitioner_, DatabaseDescriptor.getReplicationFactor(), DatabaseDescriptor.getStoragePort());
     }
 
-    protected ZooKeeper getZooKeeperHandle()
-    {
-        return zk_;
-    }
-
     static
     {
         try
@@ -275,8 +266,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         SelectorManager.getSelectorManager().start();
         SelectorManager.getUdpSelectorManager().start();
 
-        /* start the analytics context package */
-        AnalyticsContext.instance().start();
         /* starts a load timer thread */
         loadTimer_.schedule( new LoadDisseminator(), StorageService.threshold_, StorageService.threshold_);
         
@@ -702,34 +691,37 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         }        
     }
     
-    public void forceHandoff(String directories, String host) throws IOException
+    public void forceHandoff(List<String> dataDirectories, String host) throws IOException
     {       
         List<File> filesList = new ArrayList<File>();
-        String[] sources = directories.split(":");
-        for (String source : sources)
+        List<StreamContextManager.StreamContext> streamContexts = new ArrayList<StreamContextManager.StreamContext>();
+        
+        for (String dataDir : dataDirectories)
         {
-            File directory = new File(source);
+            File directory = new File(dataDir);
             Collections.addAll(filesList, directory.listFiles());            
-        }
         
-        File[] files = filesList.toArray(new File[0]);
-        StreamContextManager.StreamContext[] streamContexts = new StreamContextManager.StreamContext[files.length];
-        int i = 0;
-        for ( File file : files )
+
+            for (File tableDir : directory.listFiles())
+            {
+                String tableName = tableDir.getName();
+
+                for (File file : tableDir.listFiles())
         {
-            streamContexts[i] = new StreamContextManager.StreamContext(file.getAbsolutePath(), file.length());
+                    streamContexts.add(new StreamContextManager.StreamContext(file.getAbsolutePath(), file.length(), tableName));
             if (logger_.isDebugEnabled())
-              logger_.debug("Stream context metadata " + streamContexts[i]);
-            ++i;
+                      logger_.debug("Stream context metadata " + streamContexts);
+                }
+            }
         }
         
-        if ( files.length > 0 )
+        if ( streamContexts.size() > 0 )
     {
             EndPoint target = new EndPoint(host, DatabaseDescriptor.getStoragePort());
             /* Set up the stream manager with the files that need to streamed */
-            StreamManager.instance(target).addFilesToStream(streamContexts);
+            StreamManager.instance(target).addFilesToStream((StreamContextManager.StreamContext[]) streamContexts.toArray());
             /* Send the bootstrap initiate message */
-            BootstrapInitiateMessage biMessage = new BootstrapInitiateMessage(streamContexts);
+            BootstrapInitiateMessage biMessage = new BootstrapInitiateMessage((StreamContextManager.StreamContext[]) streamContexts.toArray());
             Message message = BootstrapInitiateMessage.makeBootstrapInitiateMessage(biMessage);
             if (logger_.isDebugEnabled())
               logger_.debug("Sending a bootstrap initiate message to " + target + " ...");
@@ -737,6 +729,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             if (logger_.isDebugEnabled())
               logger_.debug("Waiting for transfer to " + target + " to complete");
             StreamManager.instance(target).waitForStreamCompletion();
+            if (logger_.isDebugEnabled())
             logger_.debug("Done with transfer to " + target);  
         }
     }

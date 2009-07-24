@@ -27,8 +27,8 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.collections.IteratorUtils;
 import org.apache.commons.collections.Predicate;
+import org.apache.commons.lang.ArrayUtils;
 
-import org.apache.cassandra.analytics.DBAnalyticsSource;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.dht.BootstrapInitiateMessage;
 import org.apache.cassandra.dht.Range;
@@ -43,6 +43,8 @@ import org.apache.cassandra.net.io.IStreamComplete;
 import org.apache.cassandra.net.io.StreamContextManager;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.*;
+import org.apache.cassandra.db.filter.*;
+
 import org.apache.log4j.Logger;
 
 /**
@@ -186,6 +188,7 @@ public class Table
                  * sampler.
                 */                
                 SSTableReader sstable = SSTableReader.open(streamContext.getTargetFile());
+                if (logger_.isDebugEnabled())
                 logger_.debug("Merging the counting bloom filter in the sampler ...");                
                 String[] peices = FBUtilities.strip(fileName, "-");
                 Table.open(peices[0]).getColumnFamilyStore(peices[1]).addToList(sstable);                
@@ -234,7 +237,7 @@ public class Table
                     String[] peices = FBUtilities.strip(sourceFile.getName(), "-");
                     String newFileName = fileNames.get( peices[1] + "-" + peices[2] );
                     
-                    String file = DatabaseDescriptor.getDataFileLocation() + File.separator + newFileName + "-Data.db";
+                    String file = DatabaseDescriptor.getDataFileLocationForTable(streamContext.getTable()) + File.separator + newFileName + "-Data.db";
                     if (logger_.isDebugEnabled())
                       logger_.debug("Received Data from  : " + message.getFrom() + " " + streamContext.getTargetFile() + " " + file);
                     streamContext.setTargetFile(file);
@@ -243,6 +246,7 @@ public class Table
                                              
                 StreamContextManager.registerStreamCompletionHandler(message.getFrom().getHost(), new Table.BootstrapCompletionHandler());
                 /* Send a bootstrap initiation done message to execute on default stage. */
+                if (logger_.isDebugEnabled())
                 logger_.debug("Sending a bootstrap initiate done message ...");                
                 Message doneMessage = new Message( StorageService.getLocalStorageEndPoint(), "", StorageService.bootStrapInitiateDoneVerbHandler_, new byte[0] );
                 MessagingService.getMessagingInstance().sendOneWay(doneMessage, message.getFrom());
@@ -305,8 +309,6 @@ public class Table
     private Table.TableMetadata tableMetadata_;
     /* ColumnFamilyStore per column family */
     private Map<String, ColumnFamilyStore> columnFamilyStores_ = new HashMap<String, ColumnFamilyStore>();
-    /* The AnalyticsSource instance which keeps track of statistics reported to Ganglia. */
-    private DBAnalyticsSource dbAnalyticsSource_;
     // cache application CFs since Range queries ask for them a _lot_
     private SortedSet<String> applicationColumnFamilies_;
 
@@ -469,7 +471,6 @@ public class Table
     private Table(String table) throws IOException
     {
         table_ = table;
-        dbAnalyticsSource_ = new DBAnalyticsSource();
         tableMetadata_ = Table.TableMetadata.instance(table);
         for (String columnFamily : tableMetadata_.getColumnFamilies())
         {
@@ -495,24 +496,18 @@ public class Table
     /**
      * Selects the row associated with the given key.
     */
+    @Deprecated // CF should be our atom of work, not Row
     public Row get(String key) throws IOException
-    {        
+    {
         Row row = new Row(table_, key);
-        Set<String> columnFamilies = tableMetadata_.getColumnFamilies();
-        long start = System.currentTimeMillis();
-        for ( String columnFamily : columnFamilies )
+        for (String columnFamily : getColumnFamilies())
         {
-            ColumnFamilyStore cfStore = columnFamilyStores_.get(columnFamily);
-            if ( cfStore != null )
-            {                
-                ColumnFamily cf = cfStore.getColumnFamily(key, columnFamily, new IdentityFilter());                
-                if ( cf != null )
-                    row.addColumnFamily(cf);
+            ColumnFamily cf = get(key, columnFamily);
+            if (cf != null)
+            {
+                row.addColumnFamily(cf);
             }
         }
-        
-        long timeTaken = System.currentTimeMillis() - start;
-        dbAnalyticsSource_.updateReadStatistics(timeTaken);
         return row;
     }
 
@@ -520,93 +515,35 @@ public class Table
     /**
      * Selects the specified column family for the specified key.
     */
-    public ColumnFamily get(String key, String cf) throws IOException
+    @Deprecated // single CFs could be larger than memory
+    public ColumnFamily get(String key, String cfName) throws IOException
     {
-        String[] values = RowMutation.getColumnAndColumnFamily(cf);
-        long start = System.currentTimeMillis();
-        ColumnFamilyStore cfStore = columnFamilyStores_.get(values[0]);
-        assert cfStore != null : "Column family " + cf + " has not been defined";
-        ColumnFamily columnFamily = cfStore.getColumnFamily(key, cf, new IdentityFilter());
-        long timeTaken = System.currentTimeMillis() - start;
-        dbAnalyticsSource_.updateReadStatistics(timeTaken);
-        return columnFamily;
+        ColumnFamilyStore cfStore = columnFamilyStores_.get(cfName);
+        assert cfStore != null : "Column family " + cfName + " has not been defined";
+        return cfStore.getColumnFamily(new IdentityQueryFilter(key, new QueryPath(cfName)));
     }
 
     /**
      * Selects only the specified column family for the specified key.
     */
-    public Row getRow(String key, String cf) throws IOException
+    @Deprecated
+    public Row getRow(String key, String cfName) throws IOException
     {
         Row row = new Row(table_, key);
-        ColumnFamily columnFamily = get(key, cf);
+        ColumnFamily columnFamily = get(key, cfName);
         if ( columnFamily != null )
         	row.addColumnFamily(columnFamily);
         return row;
     }
     
-    public Row getRow(String key, String cf, long sinceTimeStamp) throws IOException
+    public Row getRow(QueryFilter filter) throws IOException
     {
-        Row row = new Row(table_, key);
-        String[] values = RowMutation.getColumnAndColumnFamily(cf);
-        ColumnFamilyStore cfStore = columnFamilyStores_.get(values[0]);
-        long start1 = System.currentTimeMillis();
-        assert cfStore != null : "Column family " + cf + " has not been defined";
-        ColumnFamily columnFamily = cfStore.getColumnFamily(key, cf, new TimeFilter(sinceTimeStamp));
-        if ( columnFamily != null )
+        ColumnFamilyStore cfStore = columnFamilyStores_.get(filter.getColumnFamilyName());
+        Row row = new Row(table_, filter.key);
+        ColumnFamily columnFamily = cfStore.getColumnFamily(filter);
+        if (columnFamily != null)
             row.addColumnFamily(columnFamily);
-        long timeTaken = System.currentTimeMillis() - start1;
-        dbAnalyticsSource_.updateReadStatistics(timeTaken);
         return row;
-    }
-
-    /**
-     * This method returns the specified columns for the specified
-     * column family.
-     * 
-     *  param @ key - key for which data is requested.
-     *  param @ cf - column family we are interested in.
-     *  param @ columns - columns that are part of the above column family.
-    */
-    public Row getRow(String key, String cf, List<String> columns) throws IOException
-    {
-    	Row row = new Row(table_, key);
-        String[] values = RowMutation.getColumnAndColumnFamily(cf);
-        ColumnFamilyStore cfStore = columnFamilyStores_.get(values[0]);
-
-        if ( cfStore != null )
-        {
-        	ColumnFamily columnFamily = cfStore.getColumnFamily(key, cf, new NamesFilter(new ArrayList<String>(columns)));
-        	if ( columnFamily != null )
-        		row.addColumnFamily(columnFamily);
-        }
-    	return row;
-    }
-
-    /**
-     * Selects a list of columns in a column family from a given column for the specified key.
-    */
-    public Row getRow(String key, String cfName, String start, String finish, boolean isAscending, int offset, int count) throws IOException
-    {
-        Row row = new Row(table_, key);
-        ColumnFamilyStore cfStore = columnFamilyStores_.get(cfName);
-        long start1 = System.currentTimeMillis();
-        try
-        {
-            ColumnFamily columnFamily = cfStore.getSliceFrom(key, cfName, start, finish, isAscending, offset, count);
-            if (columnFamily != null)
-                row.addColumnFamily(columnFamily);
-            long timeTaken = System.currentTimeMillis() - start1;
-            dbAnalyticsSource_.updateReadStatistics(timeTaken);
-            return row;
-        }
-        catch (InterruptedException e)
-        {
-            throw new RuntimeException(e);
-        }
-        catch (ExecutionException e)
-        {
-            throw new RuntimeException(e);
-        }
     }
 
     /**
@@ -616,8 +553,6 @@ public class Table
     */
     void apply(Row row) throws IOException
     {
-        /* Add row to the commit log. */
-        long start = System.currentTimeMillis();
         CommitLog.CommitLogContext cLogCtx = CommitLog.open().add(row);
 
         for (ColumnFamily columnFamily : row.getColumnFamilies())
@@ -625,9 +560,6 @@ public class Table
             ColumnFamilyStore cfStore = columnFamilyStores_.get(columnFamily.name());
             cfStore.apply(row.key(), columnFamily, cLogCtx);
         }
-
-        long timeTaken = System.currentTimeMillis() - start;
-        dbAnalyticsSource_.updateWriteStatistics(timeTaken);
     }
 
     void applyNow(Row row) throws IOException
@@ -657,11 +589,10 @@ public class Table
     void load(Row row) throws IOException
     {
         String key = row.key();
-        long start = System.currentTimeMillis();
                 
         for (ColumnFamily columnFamily : row.getColumnFamilies())
         {
-            Collection<IColumn> columns = columnFamily.getAllColumns();
+            Collection<IColumn> columns = columnFamily.getSortedColumns();
             for(IColumn column : columns)
             {
                 ColumnFamilyStore cfStore = columnFamilyStores_.get(column.name());
@@ -669,8 +600,6 @@ public class Table
         	}
         }
         row.clear();
-        long timeTaken = System.currentTimeMillis() - start;
-        dbAnalyticsSource_.updateWriteStatistics(timeTaken);
     }
 
     public SortedSet<String> getApplicationColumnFamilies()
@@ -711,7 +640,7 @@ public class Table
         }
     }
 
-    private List<String> getKeyRangeUnsafe(final String columnFamily, final String startWith, final String stopAt, int maxResults) throws IOException, ExecutionException, InterruptedException
+    private List<String> getKeyRangeUnsafe(final String cfName, final String startWith, final String stopAt, int maxResults) throws IOException, ExecutionException, InterruptedException
     {
         // (OPP key decoration is a no-op so using the "decorated" comparator against raw keys is fine)
         final Comparator<String> comparator = StorageService.getPartitioner().getDecoratedKeyComparator();
@@ -719,7 +648,7 @@ public class Table
         // create a CollatedIterator that will return unique keys from different sources
         // (current memtable, historical memtables, and SSTables) in the correct order.
         List<Iterator<String>> iterators = new ArrayList<Iterator<String>>();
-        ColumnFamilyStore cfs = getColumnFamilyStore(columnFamily);
+        ColumnFamilyStore cfs = getColumnFamilyStore(cfName);
 
         // we iterate through memtables with a priority queue to avoid more sorting than necessary.
         // this predicate throws out the keys before the start of our range.
@@ -735,7 +664,7 @@ public class Table
         // current memtable keys.  have to go through the CFS api for locking.
         iterators.add(IteratorUtils.filteredIterator(cfs.memtableKeyIterator(), p));
         // historical memtables
-        for (Memtable memtable : ColumnFamilyStore.getUnflushedMemtables(columnFamily))
+        for (Memtable memtable : ColumnFamilyStore.getUnflushedMemtables(cfName))
         {
             iterators.add(IteratorUtils.filteredIterator(Memtable.getKeyIterator(memtable.getKeys()), p));
         }
@@ -776,7 +705,8 @@ public class Table
                 }
                 // make sure there is actually non-tombstone content associated w/ this key
                 // TODO record the key source(s) somehow and only check that source (e.g., memtable or sstable)
-                if (cfs.getColumnFamily(current, columnFamily, new IdentityFilter(), Integer.MAX_VALUE) != null)
+                QueryFilter filter = new SliceQueryFilter(current, new QueryPath(cfName), ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, 1);
+                if (cfs.getColumnFamily(filter, Integer.MAX_VALUE) != null)
                 {
                     keys.add(current);
                 }

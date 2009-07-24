@@ -39,9 +39,11 @@ import org.apache.cassandra.net.EndPoint;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.*;
 import org.apache.cassandra.concurrent.DebuggableThreadPoolExecutor;
+import org.apache.cassandra.db.filter.*;
+import org.apache.cassandra.db.marshal.AbstractType;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.collections.IteratorUtils;
-import org.apache.commons.collections.comparators.ReverseComparator;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.cliffc.high_scale_lib.NonBlockingHashSet;
@@ -84,7 +86,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     private SortedMap<String, SSTableReader> ssTables_ = new TreeMap<String, SSTableReader>(new FileNameComparator(FileNameComparator.Descending));
 
     /* Modification lock used for protecting reads from compactions. */
-    private ReentrantReadWriteLock lock_ = new ReentrantReadWriteLock(true);
+    private ReentrantReadWriteLock sstableLock_ = new ReentrantReadWriteLock(true);
 
     private TimedStatsDeque readStats_ = new TimedStatsDeque(60000);
     private TimedStatsDeque diskReadStats_ = new TimedStatsDeque(60000);
@@ -109,18 +111,18 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
          * index.
          */
         List<Integer> indices = new ArrayList<Integer>();
-        String[] dataFileDirectories = DatabaseDescriptor.getAllDataFileLocations();
+        String[] dataFileDirectories = DatabaseDescriptor.getAllDataFileLocationsForTable(table);
         for (String directory : dataFileDirectories)
         {
             File fileDir = new File(directory);
             File[] files = fileDir.listFiles();
+            
             for (File file : files)
             {
                 String filename = file.getName();
-                String[] tblCfName = getTableAndColumnFamilyName(filename);
+                String cfName = getColumnFamilyFromFileName(filename);
 
-                if (tblCfName[0].equals(table)
-                    && tblCfName[1].equals(columnFamily))
+                if (cfName.equals(columnFamily))
                 {
                     int index = getIndexFromFileName(filename);
                     indices.add(index);
@@ -150,7 +152,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     {
         // scan for data files corresponding to this CF
         List<File> sstableFiles = new ArrayList<File>();
-        String[] dataFileDirectories = DatabaseDescriptor.getAllDataFileLocations();
+        String[] dataFileDirectories = DatabaseDescriptor.getAllDataFileLocationsForTable(table_);
         for (String directory : dataFileDirectories)
         {
             File fileDir = new File(directory);
@@ -164,9 +166,8 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                     continue;
                 }
 
-                String[] tblCfName = getTableAndColumnFamilyName(filename);
-                if (tblCfName[0].equals(table_)
-                    && tblCfName[1].equals(columnFamily_)
+                String cfName = getColumnFamilyFromFileName(filename);
+                if (cfName.equals(columnFamily_)
                     && filename.contains("-Data.db"))
                 {
                     sstableFiles.add(file.getAbsoluteFile());
@@ -251,14 +252,14 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     */
     void addToList(SSTableReader file)
     {
-        lock_.writeLock().lock();
+        sstableLock_.writeLock().lock();
         try
         {
             ssTables_.put(file.getFilename(), file);
         }
         finally
         {
-            lock_.writeLock().unlock();
+            sstableLock_.writeLock().unlock();
         }
     }
 
@@ -310,25 +311,9 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return columnFamily_;
     }
 
-    private static String[] getTableAndColumnFamilyName(String filename)
-    {
-        StringTokenizer st = new StringTokenizer(filename, "-");
-        String[] values = new String[2];
-        int i = 0;
-        while (st.hasMoreElements())
-        {
-            if (i == 0)
+    private static String getColumnFamilyFromFileName(String filename)
             {
-                values[i] = (String) st.nextElement();
-            }
-            else if (i == 1)
-            {
-                values[i] = (String) st.nextElement();
-                break;
-            }
-            ++i;
-        }
-        return values;
+        return filename.split("-")[0];
     }
 
     protected static int getIndexFromFileName(String filename)
@@ -373,14 +358,15 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     {
         // increment twice so that we do not generate consecutive numbers
         String fname = getTempSSTableFileName();
-        return new File(DatabaseDescriptor.getDataFileLocation(), fname).getAbsolutePath();
+        return new File(DatabaseDescriptor.getDataFileLocationForTable(table_), fname).getAbsolutePath();
     }
 
     String getTempSSTableFileName()
     {
         fileIndexGenerator_.incrementAndGet();
-        return String.format("%s-%s-%s-%s-Data.db",
-                             table_, columnFamily_, SSTable.TEMPFILE_MARKER, fileIndexGenerator_.incrementAndGet());
+
+        return String.format("%s-%s-%s-Data.db",
+                             columnFamily_, SSTable.TEMPFILE_MARKER, fileIndexGenerator_.incrementAndGet());
     }
 
     /*
@@ -404,8 +390,8 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
         index = lowestIndex + 1;
 
-        return String.format("%s-%s-%s-%s-Data.db",
-                             table_, columnFamily_, SSTable.TEMPFILE_MARKER, index);
+        return String.format("%s-%s-%s-Data.db",
+                             columnFamily_, SSTable.TEMPFILE_MARKER, index);
     }
 
     void switchMemtable()
@@ -505,116 +491,6 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         writeStats_.add(System.currentTimeMillis() - start);
     }
 
-    public ColumnFamily getColumnFamily(String key, String columnFamilyColumn, IFilter filter) throws IOException
-    {
-        long start = System.currentTimeMillis();
-        List<ColumnFamily> columnFamilies = getColumnFamilies(key, columnFamilyColumn, filter);
-        ColumnFamily cf = resolveAndRemoveDeleted(columnFamilies);
-        readStats_.add(System.currentTimeMillis() - start);
-        return cf;
-    }
-
-    public ColumnFamily getColumnFamily(String key, String columnFamilyColumn, IFilter filter, int gcBefore) throws IOException
-    {
-        long start = System.currentTimeMillis();
-        List<ColumnFamily> columnFamilies = getColumnFamilies(key, columnFamilyColumn, filter);
-        ColumnFamily cf = removeDeleted(ColumnFamily.resolve(columnFamilies), gcBefore);
-        readStats_.add(System.currentTimeMillis() - start);
-        return cf;
-    }
-
-    /**
-     * Get the column family in the most efficient order.
-     * 1. Memtable
-     * 2. Sorted list of files
-     */
-    List<ColumnFamily> getColumnFamilies(String key, String columnFamilyColumn, IFilter filter) throws IOException
-    {
-        List<ColumnFamily> columnFamilies = new ArrayList<ColumnFamily>();
-        /* Get the ColumnFamily from Memtable */
-        getColumnFamilyFromCurrentMemtable(key, columnFamilyColumn, filter, columnFamilies);
-        /* Check if MemtableManager has any historical information */
-        getUnflushedColumnFamily(key, columnFamily_, columnFamilyColumn, filter, columnFamilies);
-        long start = System.currentTimeMillis();
-        getColumnFamilyFromDisk(key, columnFamilyColumn, columnFamilies, filter);
-        diskReadStats_.add(System.currentTimeMillis() - start);
-
-        return columnFamilies;
-    }
-
-    /**
-     * Fetch from disk files and go in sorted order  to be efficient
-     * This function exits as soon as the required data is found.
-     *
-     * @param key
-     * @param cf
-     * @param columnFamilies
-     * @param filter
-     * @throws IOException
-     */
-    private void getColumnFamilyFromDisk(String key, String cf, List<ColumnFamily> columnFamilies, IFilter filter) throws IOException
-    {
-        lock_.readLock().lock();
-        try
-        {
-            for (SSTableReader sstable : ssTables_.values())
-            {
-                ColumnFamily columnFamily = null;
-                try
-                {
-                    columnFamily = fetchColumnFamily(key, cf, filter, sstable);
-                }
-                catch (IOException e)
-                {
-                    // annotate exception w/ more information about context
-                    throw new IOException("Error fetching " + key + ":" + cf + " from " + sstable, e);
-                }
-                if (columnFamily != null)
-                {
-                    columnFamilies.add(columnFamily);
-                }
-            }
-        }
-        finally
-        {
-            lock_.readLock().unlock();
-        }
-    }
-
-    private ColumnFamily fetchColumnFamily(String key, String cf, IFilter filter, SSTableReader ssTable) throws IOException
-    {
-        DataInputBuffer bufIn;
-        bufIn = filter.next(key, cf, ssTable);
-        if (bufIn.getLength() == 0)
-        {
-            return null;
-        }
-        ColumnFamily columnFamily = ColumnFamily.serializer().deserialize(bufIn, cf, filter);
-        if (columnFamily == null)
-        {
-            return null;
-        }
-        return columnFamily;
-    }
-
-    private void getColumnFamilyFromCurrentMemtable(String key, String cf, IFilter filter, List<ColumnFamily> columnFamilies)
-    {
-        ColumnFamily columnFamily;
-        memtableLock_.readLock().lock();
-        try
-        {
-            columnFamily = memtable_.getLocalCopy(key, cf, filter);
-        }
-        finally
-        {
-            memtableLock_.readLock().unlock();
-        }
-        if (columnFamily != null)
-        {
-            columnFamilies.add(columnFamily);
-        }
-    }
-
     /**
      * like resolve, but leaves the resolved CF as the only item in the list
      */
@@ -639,7 +515,12 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
      */
     static ColumnFamily removeDeleted(ColumnFamily cf)
     {
-        return removeDeleted(cf, (int) (System.currentTimeMillis() / 1000) - DatabaseDescriptor.getGcGraceInSeconds());
+        return removeDeleted(cf, getDefaultGCBefore());
+    }
+
+    public static int getDefaultGCBefore()
+    {
+        return (int)(System.currentTimeMillis() / 1000) - DatabaseDescriptor.getGcGraceInSeconds();
     }
 
     static ColumnFamily removeDeleted(ColumnFamily cf, int gcBefore)
@@ -654,17 +535,16 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         // either way (tombstone or non- getting priority) would be fine,
         // but we picked this way because it makes removing delivered hints
         // easier for HintedHandoffManager.
-        for (String cname : new ArrayList<String>(cf.getColumns().keySet()))
+        for (byte[] cname : cf.getColumnNames())
         {
-            IColumn c = cf.getColumns().get(cname);
+            IColumn c = cf.getColumnsMap().get(cname);
             if (c instanceof SuperColumn)
             {
                 long minTimestamp = Math.max(c.getMarkedForDeleteAt(), cf.getMarkedForDeleteAt());
                 // don't operate directly on the supercolumn, it could be the one in the memtable.
                 // instead, create a new SC and add in the subcolumns that qualify.
                 cf.remove(cname);
-                SuperColumn sc = new SuperColumn(cname);
-                sc.markForDeleteAt(c.getLocalDeletionTime(), c.getMarkedForDeleteAt());
+                SuperColumn sc = ((SuperColumn)c).cloneMeShallow();
                 for (IColumn subColumn : c.getSubColumns())
                 {
                     if (subColumn.timestamp() > minTimestamp)
@@ -731,7 +611,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     void storeLocation(SSTableReader sstable)
     {
         int ssTableCount;
-        lock_.writeLock().lock();
+        sstableLock_.writeLock().lock();
         try
         {
             ssTables_.put(sstable.getFilename(), sstable);
@@ -739,7 +619,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
         finally
         {
-            lock_.writeLock().unlock();
+            sstableLock_.writeLock().unlock();
         }
 
         /* it's ok if compaction gets submitted multiple times while one is already in process.
@@ -984,7 +864,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         doFileAntiCompaction(files, myRanges, null, newFiles);
         if (logger_.isDebugEnabled())
           logger_.debug("Original file : " + file + " of size " + new File(file).length());
-        lock_.writeLock().lock();
+        sstableLock_.writeLock().lock();
         try
         {
             ssTables_.remove(file);
@@ -999,7 +879,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
         finally
         {
-            lock_.writeLock().unlock();
+            sstableLock_.writeLock().unlock();
         }
     }
 
@@ -1029,7 +909,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         long expectedRangeFileSize = getExpectedCompactedFileSize(files);
         /* in the worst case a node will be giving out half of its data so we take a chance */
         expectedRangeFileSize = expectedRangeFileSize / 2;
-        rangeFileLocation = DatabaseDescriptor.getCompactionFileLocation(expectedRangeFileSize);
+        rangeFileLocation = DatabaseDescriptor.getDataFileLocationForTable(table_, expectedRangeFileSize);
         // If the compaction file path is null that means we have no space left for this compaction.
         if (rangeFileLocation == null)
         {
@@ -1189,12 +1069,13 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             }
         }
 
-        logger_.debug("Total time taken for range split   ..."
-                      + (System.currentTimeMillis() - startTime));
         if (logger_.isDebugEnabled())
+        {
+            logger_.debug("Total time taken for range split   ..." + (System.currentTimeMillis() - startTime));
           logger_.debug("Total bytes Read for range split  ..." + totalBytesRead);
         logger_.debug("Total bytes written for range split  ..."
                       + totalBytesWritten + "   Total keys read ..." + totalkeysRead);
+        }
         return result;
     }
 
@@ -1217,7 +1098,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     private int doFileCompaction(List<String> files, int minBufferSize) throws IOException
     {
         logger_.info("Compacting [" + StringUtils.join(files, ",") + "]");
-        String compactionFileLocation = DatabaseDescriptor.getCompactionFileLocation(getExpectedCompactedFileSize(files));
+        String compactionFileLocation = DatabaseDescriptor.getDataFileLocationForTable(table_, getExpectedCompactedFileSize(files));
         // If the compaction file path is null that means we have no space left for this compaction.
         // try again w/o the largest one.
         if (compactionFileLocation == null)
@@ -1358,7 +1239,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             ssTable = writer.closeAndOpenReader(DatabaseDescriptor.getKeysCachedFraction(table_));
             newfile = writer.getFilename();
         }
-        lock_.writeLock().lock();
+        sstableLock_.writeLock().lock();
         try
         {
             for (String file : files)
@@ -1377,7 +1258,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
         finally
         {
-            lock_.writeLock().unlock();
+            sstableLock_.writeLock().unlock();
         }
 
         String format = "Compacted to %s.  %d/%d bytes for %d/%d keys read/written.  Time: %dms.";
@@ -1400,26 +1281,6 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             memtables = memtablesPendingFlush.get(columnFamilyName); // might not be the object we just put, if there was a race!
         }
         return memtables;
-    }
-
-    /*
-     * Retrieve column family from the list of Memtables that have been
-     * submitted for flush but have not yet been flushed.
-     * It also filters out unneccesary columns based on the passed in filter.
-    */
-    void getUnflushedColumnFamily(String key, String cfName, String cf, IFilter filter, List<ColumnFamily> columnFamilies)
-    {
-        List<Memtable> memtables = getUnflushedMemtables(cfName);
-        Collections.sort(memtables);
-        int size = memtables.size();
-        for ( int i = size - 1; i >= 0; --i  )
-        {
-            ColumnFamily columnFamily = memtables.get(i).getLocalCopy(key, cf, filter);
-            if ( columnFamily != null )
-            {
-                columnFamilies.add(columnFamily);
-            }
-        }
     }
 
     /* Submit memtables to be flushed to disk */
@@ -1514,7 +1375,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     public ReentrantReadWriteLock.ReadLock getReadLock()
     {
-        return lock_.readLock();
+        return sstableLock_.readLock();
     }
 
     public int getReadCount()
@@ -1550,15 +1411,44 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     public double getWriteLatency() {
         return writeStats_.mean();
     }
-    
-    /**
-     * get a list of columns starting from a given column, in a specified order
-     * only the latest version of a column is returned
-     */
-    public ColumnFamily getSliceFrom(String key, String cfName, String startColumn, String finishColumn, boolean isAscending, int offset, int count)
-    throws IOException, ExecutionException, InterruptedException
+
+    public ColumnFamily getColumnFamily(String key, QueryPath path, byte[] start, byte[] finish, boolean isAscending, int limit) throws IOException
     {
-        lock_.readLock().lock();
+        return getColumnFamily(new SliceQueryFilter(key, path, start, finish, isAscending, limit));
+    }
+
+    public ColumnFamily getColumnFamily(QueryFilter filter) throws IOException
+    {
+        return getColumnFamily(filter, getDefaultGCBefore());
+    }
+
+    /**
+     * get a list of columns starting from a given column, in a specified order.
+     * only the latest version of a column is returned.
+     * @return null if there is no data and no tombstones; otherwise a ColumnFamily
+     */
+    public ColumnFamily getColumnFamily(QueryFilter filter, int gcBefore) throws IOException
+    {
+        assert columnFamily_.equals(filter.getColumnFamilyName());
+
+        // if we are querying subcolumns of a supercolumn, fetch the supercolumn with NQF, then filter in-memory.
+        if (filter.path.superColumnName != null)
+        {
+            AbstractType comparator = DatabaseDescriptor.getComparator(table_, columnFamily_);
+            QueryFilter nameFilter = new NamesQueryFilter(filter.key, new QueryPath(columnFamily_), filter.path.superColumnName);
+            ColumnFamily cf = getColumnFamily(nameFilter);
+            if (cf != null)
+            {
+                for (IColumn column : cf.getSortedColumns())
+                {
+                    filter.filterSuperColumn((SuperColumn)column, gcBefore);
+                }
+            }
+            return removeDeleted(cf, gcBefore);
+        }
+
+        // we are querying top-level columns, do a merging fetch with indexes.
+        sstableLock_.readLock().lock();
         List<ColumnIterator> iterators = new ArrayList<ColumnIterator>();
         try
         {
@@ -1569,7 +1459,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             memtableLock_.readLock().lock();
             try
             {
-                iter = memtable_.getColumnIterator(key, cfName, isAscending, startColumn);
+                iter = filter.getMemColumnIterator(memtable_, getComparator());
                 returnCF = iter.getColumnFamily();
             }
             finally
@@ -1579,10 +1469,10 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             iterators.add(iter);
 
             /* add the memtables being flushed */
-            List<Memtable> memtables = getUnflushedMemtables(cfName);
+            List<Memtable> memtables = getUnflushedMemtables(filter.getColumnFamilyName());
             for (Memtable memtable:memtables)
             {
-                iter = memtable.getColumnIterator(key, cfName, isAscending, startColumn);
+                iter = filter.getMemColumnIterator(memtable, getComparator());
                 returnCF.delete(iter.getColumnFamily());
                 iterators.add(iter);
             }
@@ -1591,69 +1481,22 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             List<SSTableReader> sstables = new ArrayList<SSTableReader>(ssTables_.values());
             for (SSTableReader sstable : sstables)
             {
-                iter = new SSTableColumnIterator(sstable.getFilename(), key, cfName, startColumn, isAscending);
-                if (iter.hasNext())
+                iter = filter.getSSTableColumnIterator(sstable, getComparator());
+                if (iter.hasNext()) // initializes iter.CF
                 {
                     returnCF.delete(iter.getColumnFamily());
-                    iterators.add(iter);
                 }
+                iterators.add(iter);
             }
 
-            // define a 'reduced' iterator that merges columns w/ the same name, which
-            // greatly simplifies computing liveColumns in the presence of tombstones.
-            Comparator<IColumn> comparator = new Comparator<IColumn>()
-            {
-                public int compare(IColumn c1, IColumn c2)
-                {
-                    return c1.name().compareTo(c2.name());
-                }
-            };
-            if (!isAscending)
-                comparator = new ReverseComparator(comparator);
+            Comparator<IColumn> comparator = filter.getColumnComparator(getComparator());
             Iterator collated = IteratorUtils.collatedIterator(comparator, iterators);
             if (!collated.hasNext())
-                return ColumnFamily.create(table_, cfName);
-            ReducingIterator<IColumn> reduced = new ReducingIterator<IColumn>(collated)
-            {
-                ColumnFamily curCF = returnCF.cloneMeShallow();
+                return null;
 
-                protected Object getKey(IColumn o)
-                {
-                    return o == null ? null : o.name();
-                }
+            filter.collectColumns(returnCF, collated, gcBefore);
 
-                public void reduce(IColumn current)
-                {
-                    curCF.addColumn(current);
-                }
-
-                protected IColumn getReduced()
-                {
-                    IColumn c = curCF.getAllColumns().first();
-                    curCF.clear();
-                    return c;
-                }
-            };
-
-            // add unique columns to the CF container
-            int liveColumns = 0;
-            int limit = offset + count;
-            for (IColumn column : reduced)
-            {
-                if (liveColumns >= limit)
-                    break;
-                if (!finishColumn.isEmpty()
-                    && ((isAscending && column.name().compareTo(finishColumn) > 0))
-                        || (!isAscending && column.name().compareTo(finishColumn) < 0))
-                    break;
-                if (!column.isMarkedForDelete())
-                    liveColumns++;
-
-                if (liveColumns > offset)
-                    returnCF.addColumn(column);
-            }
-
-            return removeDeleted(returnCF);
+            return removeDeleted(returnCF, gcBefore); // collect does a first pass but doesn't try to recognize e.g. the entire CF being tombstoned
         }
         finally
         {
@@ -1670,8 +1513,13 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                 }
             }
 
-            lock_.readLock().unlock();
+            sstableLock_.readLock().unlock();
         }
+    }
+
+    public AbstractType getComparator()
+    {
+        return DatabaseDescriptor.getComparator(table_, columnFamily_);
     }
 
     /**
@@ -1679,14 +1527,14 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
      */
     void clearUnsafe()
     {
-        lock_.writeLock().lock();
+        sstableLock_.writeLock().lock();
         try
         {
             memtable_.clearUnsafe();
         }
         finally
         {
-            lock_.writeLock().unlock();
+            sstableLock_.writeLock().unlock();
         }
     }
 }

@@ -20,10 +20,17 @@ package org.apache.cassandra.config;
 
 import java.util.*;
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+
+import javax.xml.transform.TransformerException;
 
 import org.apache.log4j.Logger;
 
 import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.AsciiType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.utils.FileUtils;
 import org.apache.cassandra.utils.XMLUtils;
 import org.w3c.dom.Node;
@@ -44,13 +51,12 @@ public class DatabaseDescriptor
     private static int controlPort_ = 7001;
     private static int thriftPort_ = 9160;
     private static String listenAddress_; // leave null so we can fall through to getLocalHost
+    private static String thriftAddress_;
     private static String clusterName_ = "Test";
     private static int replicationFactor_ = 3;
     private static long rpcTimeoutInMillis_ = 2000;
     private static Set<String> seeds_ = new HashSet<String>();
     private static String snapshotDirectory_;
-    /* Keeps the list of Ganglia servers to contact */
-    private static String[] gangliaServers_ ;
     /* Keeps the list of data file directories */
     private static String[] dataFileDirectories_;
     /* Current index into the above list of directories */
@@ -95,16 +101,12 @@ public class DatabaseDescriptor
      * high throughput on reads but at the cost of consistency.
     */
     private static boolean doConsistencyCheck_ = true;
-    /* Address of ZooKeeper cell */
-    private static String zkAddress_;
     /* Callout directories */
     private static String calloutLocation_;
     /* Job Jar Location */
     private static String jobJarFileLocation_;
     /* Address where to run the job tracker */
     private static String jobTrackerHost_;    
-    /* Zookeeper session timeout. */
-    private static int zkSessionTimeout_ = 30000;
     /* time to wait before garbage collecting tombstones (deletion markers) */
     private static int gcGraceInSeconds_ = 10 * 24 * 3600; // 10 days
 
@@ -124,12 +126,6 @@ public class DatabaseDescriptor
 
             /* Cluster Name */
             clusterName_ = xmlUtils.getNodeValue("/Storage/ClusterName");
-
-            /* Ganglia servers contact list */
-            gangliaServers_ = xmlUtils.getNodeValues("/Storage/GangliaServers/GangliaServer");
-
-            /* ZooKeeper's address */
-            zkAddress_ = xmlUtils.getNodeValue("/Storage/ZookeeperAddress");
 
             /* Hashing strategy */
             partitionerClass_ = xmlUtils.getNodeValue("/Storage/Partitioner");
@@ -161,11 +157,6 @@ public class DatabaseDescriptor
 
             initialToken_ = xmlUtils.getNodeValue("/Storage/InitialToken");
 
-            /* Zookeeper's session timeout */
-            String zkSessionTimeout = xmlUtils.getNodeValue("/Storage/ZookeeperSessionTimeout");
-            if ( zkSessionTimeout != null )
-                zkSessionTimeout_ = Integer.parseInt(zkSessionTimeout);
-
             /* Data replication factor */
             String replicationFactor = xmlUtils.getNodeValue("/Storage/ReplicationFactor");
             if ( replicationFactor != null )
@@ -190,6 +181,11 @@ public class DatabaseDescriptor
             String listenAddress = xmlUtils.getNodeValue("/Storage/ListenAddress");
             if ( listenAddress != null)
                 listenAddress_ = listenAddress;
+            
+            /* Local IP or hostname to bind thrift server to */
+            String thriftAddress = xmlUtils.getNodeValue("/Storage/ThriftAddress");
+            if ( thriftAddress != null )
+                thriftAddress_ = thriftAddress;
             
             /* UDP port for control messages */
             port = xmlUtils.getNodeValue("/Storage/ControlPort");
@@ -325,38 +321,39 @@ public class DatabaseDescriptor
                 for ( int j = 0; j < size2; ++j )
                 {
                     Node columnFamily = columnFamilies.item(j);
-                    String cName = XMLUtils.getAttributeValue(columnFamily, "Name");
-                    if (cName == null)
+                    String cfName = XMLUtils.getAttributeValue(columnFamily, "Name");
+                    if (cfName == null)
                     {
                         throw new ConfigurationException("ColumnFamily name attribute is required");
                     }
-                    String xqlCF = xqlTable + "ColumnFamily[@Name='" + cName + "']/";
+                    String xqlCF = xqlTable + "ColumnFamily[@Name='" + cfName + "']/";
 
                     /* squirrel away the application column families */
-                    applicationColumnFamilies_.add(cName);
+                    applicationColumnFamilies_.add(cfName);
 
                     // Parse out the column type
                     String rawColumnType = XMLUtils.getAttributeValue(columnFamily, "ColumnType");
                     String columnType = ColumnFamily.getColumnType(rawColumnType);
                     if (columnType == null)
                     {
-                        throw new ConfigurationException("Column " + cName + " has invalid type " + rawColumnType);
+                        throw new ConfigurationException("ColumnFamily " + cfName + " has invalid type " + rawColumnType);
                     }
 
-                    // Parse out the column family sorting property for columns
-                    String rawColumnIndexType = XMLUtils.getAttributeValue(columnFamily, "ColumnSort");
-                    String columnIndexType = ColumnFamily.getColumnSortProperty(rawColumnIndexType);
-                    if (columnIndexType == null)
+                    if (XMLUtils.getAttributeValue(columnFamily, "ColumnSort") != null)
                     {
-                        throw new ConfigurationException("invalid column sort value " + rawColumnIndexType);
+                        throw new ConfigurationException("ColumnSort is no longer an accepted attribute.  Use CompareWith instead.");
                     }
-                    if ("Super".equals(columnType))
+
+                    // Parse out the column comparator
+                    AbstractType columnComparator = getComparator(columnFamily, "CompareWith");
+                    AbstractType subcolumnComparator;
+                    if (columnType.equals("Super"))
                     {
-                        if (rawColumnIndexType != null)
-                        {
-                            throw new ConfigurationException("Super columnfamilies are always name-sorted, and their subcolumns are always time-sorted.  You may not specify the ColumnSort attribute on a SuperColumn.");
-                        }
-                        columnIndexType = "Name";
+                        subcolumnComparator = getComparator(columnFamily, "CompareSubcolumnsWith");
+                    }
+                    else if (XMLUtils.getAttributeValue(columnFamily, "CompareSubcolumnsWith") != null)
+                    {
+                        throw new ConfigurationException("CompareSubcolumnsWith is only a valid attribute on super columnfamilies (not regular columnfamily " + cfName + ")");
                     }
 
                     // see if flush period is set
@@ -397,10 +394,11 @@ public class DatabaseDescriptor
                     CFMetaData cfMetaData = new CFMetaData();
 
                     cfMetaData.tableName = tName;
-                    cfMetaData.cfName = cName;
+                    cfMetaData.cfName = cfName;
 
                     cfMetaData.columnType = columnType;
-                    cfMetaData.indexProperty_ = columnIndexType;
+                    cfMetaData.comparator = columnComparator;
+                    cfMetaData.subcolumnComparator = columnComparator;
 
                     cfMetaData.n_rowKey = n_rowKey;
                     cfMetaData.n_columnMap = n_columnMap;
@@ -414,9 +412,27 @@ public class DatabaseDescriptor
                     }
                     cfMetaData.flushPeriodInMinutes = flushPeriod;
                     
-                    tableToCFMetaDataMap_.get(tName).put(cName, cfMetaData);
+                    tableToCFMetaDataMap_.get(tName).put(cfName, cfMetaData);
                 }
             }
+
+            // Hardcoded system tables
+            Map<String, CFMetaData> systemMetadata = new HashMap<String, CFMetaData>();
+
+            CFMetaData data = new CFMetaData();
+            data.comparator = new AsciiType();
+            systemMetadata.put(SystemTable.LOCATION_CF, data);
+
+            data = new CFMetaData();
+            data.columnType = "Super";
+            data.comparator = new UTF8Type();
+            data.subcolumnComparator = new BytesType();
+            systemMetadata.put(HintedHandOffManager.HINTS_CF, data);
+
+            tableToCFMetaDataMap_.put("system", systemMetadata);
+
+            /* make sure we have a directory for each table */
+            createTableDirectories();
 
             /* Load the seeds for node contact points */
             String[] seeds = xmlUtils.getNodeValues("/Storage/Seeds/Seed");
@@ -436,13 +452,52 @@ public class DatabaseDescriptor
             throw new RuntimeException(e);
         }
     }
-    
 
-    /*
+    private static AbstractType getComparator(Node columnFamily, String attr)
+    throws ConfigurationException, TransformerException, NoSuchMethodException, InvocationTargetException, IllegalAccessException, InstantiationException
+    {
+        Class<? extends AbstractType> typeClass;
+        String compareWith = XMLUtils.getAttributeValue(columnFamily, attr);
+        if (compareWith == null)
+        {
+            typeClass = AsciiType.class;
+        }
+        else
+        {
+            String className = compareWith.contains(".") ? compareWith : "org.apache.cassandra.db.marshal." + compareWith;
+            try
+            {
+                typeClass = (Class<? extends AbstractType>)Class.forName(className);
+            }
+            catch (ClassNotFoundException e)
+            {
+                throw new ConfigurationException("Unable to load class " + className + " for " + attr + " attribute");
+            }
+        }
+        return typeClass.getConstructor().newInstance();
+    }
+
+    /**
+     * Create the table directory in each data directory
+     */
+    public static void createTableDirectories() throws IOException
+    {
+        for (String dataFile : dataFileDirectories_) 
+        {
+            FileUtils.createDirectory(dataFile + File.separator + Table.SYSTEM_TABLE);
+            for (String table : tables_)
+            {
+                FileUtils.createDirectory(dataFile + File.separator + table);
+            }
+        }
+    }
+
+    /**
      * Create the metadata tables. This table has information about
      * the table name and the column families that make up the table.
      * Each column family also has an associated ID which is an int.
     */
+    // TODO duplicating data b/t tablemetadata and CFMetaData is confusing and error-prone
     public static void storeMetadata() throws IOException
     {
         int cfId = 0;
@@ -463,11 +518,6 @@ public class DatabaseDescriptor
                 }
             }
         }
-
-        // Hardcoded system table
-        Table.TableMetadata tmetadata = Table.TableMetadata.instance(Table.SYSTEM_TABLE);
-        tmetadata.add(SystemTable.LOCATION_CF, cfId++);
-        tmetadata.add(HintedHandOffManager.HINTS_CF, cfId++, ColumnFamily.getColumnType("Super"));
     }
 
     public static int getGcGraceInSeconds()
@@ -480,11 +530,6 @@ public class DatabaseDescriptor
         return partitionerClass_;
     }
     
-    public static String getZkAddress()
-    {
-        return zkAddress_;
-    }
-    
     public static String getCalloutLocation()
     {
         return calloutLocation_;
@@ -495,17 +540,11 @@ public class DatabaseDescriptor
         return jobTrackerHost_;
     }
     
-    public static int getZkSessionTimeout()
-    {
-        return zkSessionTimeout_;
-    }
-
     public static int getColumnIndexSize()
     {
     	return columnIndexSizeInKB_ * 1024;
     }
 
-   
     public static int getMemtableLifetime()
     {
       return memtableLifetime_;
@@ -549,18 +588,6 @@ public class DatabaseDescriptor
     {
         return jobJarFileLocation_;
     }
-
-    public static String getGangliaServers()
-    {
-    	StringBuilder sb = new StringBuilder();
-    	for ( int i = 0; i < gangliaServers_.length; ++i )
-    	{
-    		sb.append(gangliaServers_[i]);
-    		if ( i != (gangliaServers_.length - 1) )
-    			sb.append(", ");
-    	}
-    	return sb.toString();
-    }
     
     public static Map<String, CFMetaData> getTableMetaData(String tableName)
     {
@@ -601,28 +628,6 @@ public class DatabaseDescriptor
         if (cfMetaData == null)
             return 0;
         return cfMetaData.flushPeriodInMinutes;
-    }
-
-    public static boolean isNameSortingEnabled(String tableName, String cfName)
-    {
-        assert tableName != null;
-        CFMetaData cfMetaData = getCFMetaData(tableName, cfName);
-
-        if (cfMetaData == null)
-            return false;
-
-    	return "Name".equals(cfMetaData.indexProperty_);
-    }
-    
-    public static boolean isTimeSortingEnabled(String tableName, String cfName)
-    {
-        assert tableName != null;
-        CFMetaData cfMetaData = getCFMetaData(tableName, cfName);
-
-        if (cfMetaData == null)
-            return false;
-
-        return "Time".equals(cfMetaData.indexProperty_);
     }
 
     public static List<String> getTables()
@@ -692,16 +697,22 @@ public class DatabaseDescriptor
         return dataFileDirectories_;
     }
 
-    public static String getDataFileLocation()
+    public static String[] getAllDataFileLocationsForTable(String table)
     {
-    	String dataFileDirectory = dataFileDirectories_[currentIndex_];
-        return dataFileDirectory;
+        String[] tableLocations = new String[dataFileDirectories_.length];
+
+        for (int i = 0; i < dataFileDirectories_.length; i++)
+        {
+            tableLocations[i] = dataFileDirectories_[i] + File.separator + table;
+        }
+
+        return tableLocations;
     }
-    
-    public static String getCompactionFileLocation()
+
+    public static String getDataFileLocationForTable(String table)
     {
-    	String dataFileDirectory = dataFileDirectories_[currentIndex_];
-    	currentIndex_ = (currentIndex_ + 1 )%dataFileDirectories_.length ;
+        String dataFileDirectory = dataFileDirectories_[currentIndex_] + File.separator + table;
+        currentIndex_ = (currentIndex_ + 1) % dataFileDirectories_.length;
         return dataFileDirectory;
     }
 
@@ -750,14 +761,16 @@ public class DatabaseDescriptor
      * compacted file is greater than the max disk space available return null, we cannot
      * do compaction in this case.
      */
-    public static String getCompactionFileLocation(long expectedCompactedFileSize)
+    public static String getDataFileLocationForTable(String table, long expectedCompactedFileSize)
     {
       long maxFreeDisk = 0;
       int maxDiskIndex = 0;
       String dataFileDirectory = null;
-      for ( int i = 0 ; i < dataFileDirectories_.length ; i++ )
+      String[] dataDirectoryForTable = getAllDataFileLocationsForTable(table);
+
+      for ( int i = 0 ; i < dataDirectoryForTable.length ; i++ )
       {
-        File f = new File(dataFileDirectories_[i]);
+        File f = new File(dataDirectoryForTable[i]);
         if( maxFreeDisk < f.getUsableSpace())
         {
           maxFreeDisk = f.getUsableSpace();
@@ -768,8 +781,8 @@ public class DatabaseDescriptor
       maxFreeDisk = (long)(0.9 * maxFreeDisk);
       if( expectedCompactedFileSize < maxFreeDisk )
       {
-        dataFileDirectory = dataFileDirectories_[maxDiskIndex];
-        currentIndex_ = (maxDiskIndex + 1 )%dataFileDirectories_.length ;
+        dataFileDirectory = dataDirectoryForTable[maxDiskIndex];
+        currentIndex_ = (maxDiskIndex + 1 )%dataDirectoryForTable.length ;
       }
       else
       {
@@ -778,18 +791,16 @@ public class DatabaseDescriptor
         return dataFileDirectory;
     }
     
-    public static ColumnComparatorFactory.ComparatorType getTypeInfo(String tableName, String cfName)
+    public static AbstractType getComparator(String tableName, String cfName)
     {
         assert tableName != null;
-        CFMetaData cfMetadata = DatabaseDescriptor.getCFMetaData(tableName, cfName);
-        if ( cfMetadata.indexProperty_.equals("Name") )
-        {
-            return ColumnComparatorFactory.ComparatorType.NAME;
-        }
-        else
-        {
-            return ColumnComparatorFactory.ComparatorType.TIMESTAMP;
-        }
+        return getCFMetaData(tableName, cfName).comparator;
+    }
+
+    public static AbstractType getSubComparator(String tableName, String cfName)
+    {
+        assert tableName != null;
+        return getCFMetaData(tableName, cfName).comparator;
     }
 
     public static Map<String, Map<String, CFMetaData>> getTableToColumnFamilyMap()
@@ -813,5 +824,10 @@ public class DatabaseDescriptor
     public static String getListenAddress()
     {
         return listenAddress_;
+    }
+    
+    public static String getThriftAddress()
+    {
+        return thriftAddress_;
     }
 }

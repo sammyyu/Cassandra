@@ -49,14 +49,29 @@
                  disable entirely.
             -->
             <KeysCachedFraction>0.01</KeysCachedFraction>
-            <!-- if FlushPeriodInMinutes is configured and positive, it will be
+            <!-- 
+                 The CompareWith attribute tells Cassandra how to sort the columns
+                 for slicing operations.  For backwards compatibility, the default 
+                 is to use AsciiType, which is probably NOT what you want.
+                 Other options are BytesType, UTF8Type, UUIDType, and LongType.
+                 You can also specify the fully-qualified class name to a class
+                 of your choice implementing org.apache.cassandra.db.marshal.IType.
+
+                 SuperColumns have a similar CompareSubcolumnsWith attribute.
+
+                 (So to get the closest approximation to 0.3-style supercolumns,
+                 you would use CompareWith=UTF8Type CompareSubcolumnsWith=LongType.)
+
+                 if FlushPeriodInMinutes is configured and positive, it will be
                  flushed to disk with that period whether it is dirty or not.
                  This is intended for lightly-used columnfamilies so that they
-                 do not prevent commitlog segments from being purged. -->
-            <ColumnFamily ColumnSort="Name" Name="Standard1" FlushPeriodInMinutes="60"/>
-            <ColumnFamily ColumnSort="Name" Name="Standard2"/>
-            <ColumnFamily ColumnSort="Time" Name="StandardByTime1"/>
-            <ColumnFamily ColumnType="Super" Name="Super1"/>
+                 do not prevent commitlog segments from being purged. 
+
+            -->
+            <ColumnFamily CompareWith="UTF8Type" Name="Standard1" FlushPeriodInMinutes="60"/>
+            <ColumnFamily CompareWith="UTF8Type" Name="Standard2"/>
+            <ColumnFamily CompareWith="UUIDType" Name="StandardByUUID1"/>
+            <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="Super1"/>
         </Table>
     </Tables>
 
@@ -139,7 +154,16 @@
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
     <ControlPort>7001</ControlPort>
-    <!-- port clients connect to -->
+
+    <!-- The address to bind the Thrift RPC service to. Unlike 
+         ListenAddress above, you *can* specify 0.0.0.0 here if you want
+         Thrift to listen on all interfaces.
+         
+         Leaving this blank has the same effect it does for ListenAddress,
+         (i.e. it will be based on the configured hostname of the node).
+    -->
+    <ThriftAddress>localhost</ThriftAddress>
+    <!-- Thrift RPC port (the port clients connect to). -->
     <ThriftPort>9160</ThriftPort>
 
 
@@ -172,14 +196,4 @@
          face of hardware failures.  The default value is ten days.
     -->
     <GCGraceSeconds>864000</GCGraceSeconds>
-
-
-    <!--======================================================================-->
-    <!-- OPTIONAL                                                             -->
-    <!--======================================================================-->
-    <!-- This final section contains configuration information for optional
-         and experimental features in Cassandra that are not yet fully functional.
-         Basic features in Cassandra should work fine without configuring this section.
-    -->
-    <ZookeeperAddress>127.0.0.1</ZookeeperAddress>
 </Storage>
