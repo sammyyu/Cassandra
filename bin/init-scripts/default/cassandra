@@ -22,7 +22,7 @@ JAVA_OPTIONS=" \
         -Dcom.sun.management.jmxremote.authenticate=false"
 
 IP=`/sbin/ifconfig eth0 | grep "inet addr" | awk -F: '{print $2}' | awk '{print $1}'`
-JAVA_OPTIONS="$JAVA_OPTIONS -Dcom.sun.management.jmxremote.port=8081 -Djava.rmi.server.hostname=${IP}"
+JAVA_OPTIONS="$JAVA_OPTIONS -Dcom.sun.management.jmxremote.port=8080 -Djava.rmi.server.hostname=${IP}"
 JMETRIX_PATH="$CASSANDRA_HOME/jmxetric-0.0.3"
 CLASSPATH=$CLASSPATH:"$JMETRIX_PATH/oncrpc-1.0.7.jar"
 JMETRIX_CONFIG="host=239.2.11.71,port=8649,wireformat31x=true,config=$JMETRIX_PATH/etc/cassandra.xml"
