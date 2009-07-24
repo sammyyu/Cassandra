@@ -18,14 +18,7 @@
 
 package org.apache.cassandra.utils;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -40,6 +33,8 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
+import org.apache.log4j.Logger;
+
 import org.apache.cassandra.config.DatabaseDescriptor;
 
 /**
@@ -48,6 +43,7 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 
 public class FBUtilities
 {
+    private static Logger logger_ = Logger.getLogger(FBUtilities.class);
 
     private static InetAddress localInetAddress_;
 
@@ -377,4 +373,18 @@ public class FBUtilities
 
      	return length;
      }
+
+    public static void writeByteArray(byte[] bytes, DataOutput out) throws IOException
+    {
+        out.writeInt(bytes.length);
+        out.write(bytes);
+    }
+
+    public static byte[] readByteArray(DataInput in) throws IOException
+    {
+        int length = in.readInt();
+        byte[] bytes = new byte[length];
+        in.readFully(bytes);
+        return bytes;
+    }
 }

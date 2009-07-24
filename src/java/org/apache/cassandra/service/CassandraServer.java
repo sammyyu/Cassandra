@@ -26,11 +26,14 @@ import java.util.concurrent.TimeoutException;
 
 import org.apache.log4j.Logger;
 
+import org.apache.commons.lang.ArrayUtils;
+
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.cql.common.CqlResult;
 import org.apache.cassandra.cql.driver.CqlDriver;
 import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.marshal.MarshalException;
 import org.apache.cassandra.db.filter.QueryPath;
 import org.apache.cassandra.utils.LogUtil;
 import org.apache.cassandra.dht.OrderPreservingPartitioner;
@@ -98,6 +101,11 @@ public class CassandraServer implements Cassandra.Iface
 
     public List<Column> thriftifyColumns(Collection<IColumn> columns)
     {
+        return thriftifyColumns(columns, false);
+    }
+    
+    public List<Column> thriftifyColumns(Collection<IColumn> columns, boolean reverseOrder)
+    {
         if (columns == null || columns.isEmpty())
         {
             return EMPTY_COLUMNS;
@@ -114,6 +122,8 @@ public class CassandraServer implements Cassandra.Iface
             thriftColumns.add(thrift_column);
         }
 
+        if (reverseOrder)
+            Collections.reverse(thriftColumns);
         return thriftColumns;
     }
 
@@ -121,28 +131,24 @@ public class CassandraServer implements Cassandra.Iface
     private List<Column> getSlice(ReadCommand command) throws InvalidRequestException
     {
         ColumnFamily cfamily = readColumnFamily(command);
-        if (cfamily == null || cfamily.getColumns().size() == 0)
+        boolean reverseOrder = false;
+        
+        if (command instanceof SliceFromReadCommand)
+            reverseOrder = !((SliceFromReadCommand)command).isAscending;
+
+        if (cfamily == null || cfamily.getColumnsMap().size() == 0)
         {
             return EMPTY_COLUMNS;
         }
         if (cfamily.isSuper())
         {
-            IColumn column = cfamily.getColumns().values().iterator().next();
-            return thriftifyColumns(column.getSubColumns());
+            IColumn column = cfamily.getColumnsMap().values().iterator().next();
+            return thriftifyColumns(column.getSubColumns(), reverseOrder);
         }
-        return thriftifyColumns(cfamily.getAllColumns());
+        return thriftifyColumns(cfamily.getSortedColumns(), reverseOrder);
     }
 
-    public List<Column> get_columns_since(String table, String key, ColumnParent column_parent, long timeStamp)
-    throws InvalidRequestException, NotFoundException
-    {
-        logger.debug("get_columns_since");
-        ThriftValidation.validateColumnParent(table, column_parent);
-        return getSlice(new ColumnsSinceReadCommand(table, key, column_parent, timeStamp));
-    }
-
-
-    public List<Column> get_slice_by_names(String table, String key, ColumnParent column_parent, List<String> column_names)
+    public List<Column> get_slice_by_names(String table, String key, ColumnParent column_parent, List<byte[]> column_names)
     throws InvalidRequestException, NotFoundException
     {
         logger.debug("get_slice_by_names");
@@ -150,18 +156,14 @@ public class CassandraServer implements Cassandra.Iface
         return getSlice(new SliceByNamesReadCommand(table, key, column_parent, column_names));
     }
 
-    public List<Column> get_slice(String table, String key, ColumnParent column_parent, String start, String finish, boolean is_ascending, int count)
+    public List<Column> get_slice(String table, String key, ColumnParent column_parent, byte[] start, byte[] finish, boolean is_ascending, int count)
     throws InvalidRequestException, NotFoundException
     {
         logger.debug("get_slice_from");
         ThriftValidation.validateColumnParent(table, column_parent);
         // TODO support get_slice on super CFs
-        if (column_parent.super_column != null || !DatabaseDescriptor.getColumnFamilyType(table, column_parent.column_family).equals("Standard"))
-            throw new InvalidRequestException("get_slice does not yet support super columns (we need to fix this)");
         if (count <= 0)
             throw new InvalidRequestException("get_slice requires positive count");
-        if (!"Name".equals(DatabaseDescriptor.getCFMetaData(table, column_parent.column_family).indexProperty_))
-            throw new InvalidRequestException("get_slice requires CF indexed by name");
 
         return getSlice(new SliceFromReadCommand(table, key, column_parent, start, finish, is_ascending, count));
     }
@@ -190,7 +192,7 @@ public class CassandraServer implements Cassandra.Iface
         }
         else
         {
-            columns = cfamily.getAllColumns();
+            columns = cfamily.getSortedColumns();
         }
         if (columns == null || columns.size() == 0)
         {
@@ -221,15 +223,7 @@ public class CassandraServer implements Cassandra.Iface
         }
 
         ColumnFamily cfamily;
-        if (DatabaseDescriptor.isNameSortingEnabled(table, column_parent.column_family)
-            && column_parent.super_column == null)
-        {
-            cfamily = readColumnFamily(new SliceFromReadCommand(table, key, column_parent, "", "", true, Integer.MAX_VALUE));
-        }
-        else
-        {
-            cfamily = readColumnFamily(new ColumnsSinceReadCommand(table, key, column_parent, Long.MIN_VALUE));
-        }
+        cfamily = readColumnFamily(new SliceFromReadCommand(table, key, column_parent, ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, Integer.MAX_VALUE));
         if (cfamily == null)
         {
             return 0;
@@ -245,7 +239,7 @@ public class CassandraServer implements Cassandra.Iface
         }
         else
         {
-            columns = cfamily.getAllColumns();
+            columns = cfamily.getSortedColumns();
         }
         if (columns == null || columns.size() == 0)
         {
@@ -262,7 +256,14 @@ public class CassandraServer implements Cassandra.Iface
         ThriftValidation.validateColumnPath(table, column_path);
 
         RowMutation rm = new RowMutation(table, key.trim());
-        rm.add(new QueryPath(column_path), value, timestamp);
+        try
+        {
+            rm.add(new QueryPath(column_path), value, timestamp);
+        }
+        catch (MarshalException e)
+        {
+            throw new InvalidRequestException(e.getMessage());
+        }
         doInsert(block_for, rm);
     }
 
@@ -301,7 +302,7 @@ public class CassandraServer implements Cassandra.Iface
         }
     }
 
-    public List<SuperColumn> get_slice_super_by_names(String table, String key, String column_family, List<String> super_column_names)
+    public List<SuperColumn> get_slice_super_by_names(String table, String key, String column_family, List<byte[]> super_column_names)
     throws InvalidRequestException
     {
         logger.debug("get_slice_super_by_names");
@@ -312,10 +313,15 @@ public class CassandraServer implements Cassandra.Iface
         {
             return EMPTY_SUPERCOLUMNS;
         }
-        return thriftifySuperColumns(cfamily.getAllColumns());
+        return thriftifySuperColumns(cfamily.getSortedColumns());
     }
 
     private List<SuperColumn> thriftifySuperColumns(Collection<IColumn> columns)
+    {
+        return thriftifySuperColumns(columns, false);
+    }
+    
+    private List<SuperColumn> thriftifySuperColumns(Collection<IColumn> columns, boolean reverseOrder)
     {
         if (columns == null || columns.isEmpty())
         {
@@ -333,10 +339,13 @@ public class CassandraServer implements Cassandra.Iface
             thriftSuperColumns.add(new SuperColumn(column.name(), subcolumns));
         }
 
+        if (reverseOrder)
+            Collections.reverse(thriftSuperColumns);
+
         return thriftSuperColumns;
     }
 
-    public List<SuperColumn> get_slice_super(String table, String key, String column_family, String start, String finish, boolean is_ascending, int count)
+    public List<SuperColumn> get_slice_super(String table, String key, String column_family, byte[] start, byte[] finish, boolean is_ascending, int count)
     throws InvalidRequestException
     {
         logger.debug("get_slice_super");
@@ -350,8 +359,8 @@ public class CassandraServer implements Cassandra.Iface
         {
             return EMPTY_SUPERCOLUMNS;
         }
-        Collection<IColumn> columns = cfamily.getAllColumns();
-        return thriftifySuperColumns(columns);
+        Collection<IColumn> columns = cfamily.getSortedColumns();
+        return thriftifySuperColumns(columns, !is_ascending);
     }
 
 
@@ -366,7 +375,7 @@ public class CassandraServer implements Cassandra.Iface
         {
             throw new NotFoundException();
         }
-        Collection<IColumn> columns = cfamily.getAllColumns();
+        Collection<IColumn> columns = cfamily.getSortedColumns();
         if (columns == null || columns.size() == 0)
         {
             throw new NotFoundException();
@@ -465,18 +474,18 @@ public class CassandraServer implements Cassandra.Iface
             Map<String, String> columnMap = new HashMap<String, String>();
             desc = columnFamilyMetaData.n_columnMap + "(" + columnFamilyMetaData.n_columnKey + ", " + columnFamilyMetaData.n_columnValue + ", " + columnFamilyMetaData.n_columnTimestamp + ")";
             if (columnFamilyMetaData.columnType.equals("Super")) {
-                columnMap.put("type", "Super");
+                columnMap.put("Type", "Super");
                 desc = columnFamilyMetaData.n_superColumnMap + "(" + columnFamilyMetaData.n_superColumnKey + ", " + desc + ")"; 
             } else {
-                columnMap.put("type", "Standard");
+                columnMap.put("Type", "Standard");
             }
             
             desc = columnFamilyMetaData.tableName + "." + columnFamilyMetaData.cfName + "(" + 
                 columnFamilyMetaData.n_rowKey + ", " + desc + ")";
 
-            columnMap.put("desc", desc);
-            columnMap.put("sort", columnFamilyMetaData.indexProperty_);
-            columnMap.put("flushperiod", columnFamilyMetaData.flushPeriodInMinutes + "");
+            columnMap.put("Desc", desc);
+            columnMap.put("CompareWith", columnFamilyMetaData.comparator.getClass().getName());
+            columnMap.put("FlushPeriodInMinutes", columnFamilyMetaData.flushPeriodInMinutes + "");
             columnFamiliesMap.put(columnFamilyMetaData.cfName, columnMap);
         }
         return columnFamiliesMap;

@@ -20,10 +20,17 @@ package org.apache.cassandra.config;
 
 import java.util.*;
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+
+import javax.xml.transform.TransformerException;
 
 import org.apache.log4j.Logger;
 
 import org.apache.cassandra.db.*;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.AsciiType;
+import org.apache.cassandra.db.marshal.UTF8Type;
+import org.apache.cassandra.db.marshal.BytesType;
 import org.apache.cassandra.utils.FileUtils;
 import org.apache.cassandra.utils.XMLUtils;
 import org.w3c.dom.Node;
@@ -44,6 +51,7 @@ public class DatabaseDescriptor
     private static int controlPort_ = 7001;
     private static int thriftPort_ = 9160;
     private static String listenAddress_; // leave null so we can fall through to getLocalHost
+    private static String thriftAddress_;
     private static String clusterName_ = "Test";
     private static int replicationFactor_ = 3;
     private static long rpcTimeoutInMillis_ = 2000;
@@ -69,7 +77,7 @@ public class DatabaseDescriptor
     private static String d_columnMap_        = "COLUMN_MAP";
     private static String d_columnKey_        = "COLUMN_KEY";
     private static String d_columnValue_      = "COLUMN_VALUE";
-    private static String d_columnTimestamp_  = "ColumnIMESTAMP";
+    private static String d_columnTimestamp_  = "COLUMN_TIMESTAMP";
 
     private static Map<String, Double> tableKeysCachedFractions_;
     /*
@@ -173,6 +181,11 @@ public class DatabaseDescriptor
             String listenAddress = xmlUtils.getNodeValue("/Storage/ListenAddress");
             if ( listenAddress != null)
                 listenAddress_ = listenAddress;
+            
+            /* Local IP or hostname to bind thrift server to */
+            String thriftAddress = xmlUtils.getNodeValue("/Storage/ThriftAddress");
+            if ( thriftAddress != null )
+                thriftAddress_ = thriftAddress;
             
             /* UDP port for control messages */
             port = xmlUtils.getNodeValue("/Storage/ControlPort");
@@ -308,38 +321,39 @@ public class DatabaseDescriptor
                 for ( int j = 0; j < size2; ++j )
                 {
                     Node columnFamily = columnFamilies.item(j);
-                    String cName = XMLUtils.getAttributeValue(columnFamily, "Name");
-                    if (cName == null)
+                    String cfName = XMLUtils.getAttributeValue(columnFamily, "Name");
+                    if (cfName == null)
                     {
                         throw new ConfigurationException("ColumnFamily name attribute is required");
                     }
-                    String xqlCF = xqlTable + "ColumnFamily[@Name='" + cName + "']/";
+                    String xqlCF = xqlTable + "ColumnFamily[@Name='" + cfName + "']/";
 
                     /* squirrel away the application column families */
-                    applicationColumnFamilies_.add(cName);
+                    applicationColumnFamilies_.add(cfName);
 
                     // Parse out the column type
                     String rawColumnType = XMLUtils.getAttributeValue(columnFamily, "ColumnType");
                     String columnType = ColumnFamily.getColumnType(rawColumnType);
                     if (columnType == null)
                     {
-                        throw new ConfigurationException("Column " + cName + " has invalid type " + rawColumnType);
+                        throw new ConfigurationException("ColumnFamily " + cfName + " has invalid type " + rawColumnType);
                     }
 
-                    // Parse out the column family sorting property for columns
-                    String rawColumnIndexType = XMLUtils.getAttributeValue(columnFamily, "ColumnSort");
-                    String columnIndexType = ColumnFamily.getColumnSortProperty(rawColumnIndexType);
-                    if (columnIndexType == null)
+                    if (XMLUtils.getAttributeValue(columnFamily, "ColumnSort") != null)
                     {
-                        throw new ConfigurationException("invalid column sort value " + rawColumnIndexType);
+                        throw new ConfigurationException("ColumnSort is no longer an accepted attribute.  Use CompareWith instead.");
                     }
-                    if ("Super".equals(columnType))
+
+                    // Parse out the column comparator
+                    AbstractType columnComparator = getComparator(columnFamily, "CompareWith");
+                    AbstractType subcolumnComparator;
+                    if (columnType.equals("Super"))
                     {
-                        if (rawColumnIndexType != null)
-                        {
-                            throw new ConfigurationException("Super columnfamilies are always name-sorted, and their subcolumns are always time-sorted.  You may not specify the ColumnSort attribute on a SuperColumn.");
-                        }
-                        columnIndexType = "Name";
+                        subcolumnComparator = getComparator(columnFamily, "CompareSubcolumnsWith");
+                    }
+                    else if (XMLUtils.getAttributeValue(columnFamily, "CompareSubcolumnsWith") != null)
+                    {
+                        throw new ConfigurationException("CompareSubcolumnsWith is only a valid attribute on super columnfamilies (not regular columnfamily " + cfName + ")");
                     }
 
                     // see if flush period is set
@@ -380,10 +394,11 @@ public class DatabaseDescriptor
                     CFMetaData cfMetaData = new CFMetaData();
 
                     cfMetaData.tableName = tName;
-                    cfMetaData.cfName = cName;
+                    cfMetaData.cfName = cfName;
 
                     cfMetaData.columnType = columnType;
-                    cfMetaData.indexProperty_ = columnIndexType;
+                    cfMetaData.comparator = columnComparator;
+                    cfMetaData.subcolumnComparator = columnComparator;
 
                     cfMetaData.n_rowKey = n_rowKey;
                     cfMetaData.n_columnMap = n_columnMap;
@@ -397,10 +412,24 @@ public class DatabaseDescriptor
                     }
                     cfMetaData.flushPeriodInMinutes = flushPeriod;
                     
-                    tableToCFMetaDataMap_.get(tName).put(cName, cfMetaData);
+                    tableToCFMetaDataMap_.get(tName).put(cfName, cfMetaData);
                 }
             }
 
+            // Hardcoded system tables
+            Map<String, CFMetaData> systemMetadata = new HashMap<String, CFMetaData>();
+
+            CFMetaData data = new CFMetaData();
+            data.comparator = new AsciiType();
+            systemMetadata.put(SystemTable.LOCATION_CF, data);
+
+            data = new CFMetaData();
+            data.columnType = "Super";
+            data.comparator = new UTF8Type();
+            data.subcolumnComparator = new BytesType();
+            systemMetadata.put(HintedHandOffManager.HINTS_CF, data);
+
+            tableToCFMetaDataMap_.put("system", systemMetadata);
 
             /* make sure we have a directory for each table */
             createTableDirectories();
@@ -423,7 +452,31 @@ public class DatabaseDescriptor
             throw new RuntimeException(e);
         }
     }
-    
+
+    private static AbstractType getComparator(Node columnFamily, String attr)
+    throws ConfigurationException, TransformerException, NoSuchMethodException, InvocationTargetException, IllegalAccessException, InstantiationException
+    {
+        Class<? extends AbstractType> typeClass;
+        String compareWith = XMLUtils.getAttributeValue(columnFamily, attr);
+        if (compareWith == null)
+        {
+            typeClass = AsciiType.class;
+        }
+        else
+        {
+            String className = compareWith.contains(".") ? compareWith : "org.apache.cassandra.db.marshal." + compareWith;
+            try
+            {
+                typeClass = (Class<? extends AbstractType>)Class.forName(className);
+            }
+            catch (ClassNotFoundException e)
+            {
+                throw new ConfigurationException("Unable to load class " + className + " for " + attr + " attribute");
+            }
+        }
+        return typeClass.getConstructor().newInstance();
+    }
+
     /**
      * Create the table directory in each data directory
      */
@@ -444,6 +497,7 @@ public class DatabaseDescriptor
      * the table name and the column families that make up the table.
      * Each column family also has an associated ID which is an int.
     */
+    // TODO duplicating data b/t tablemetadata and CFMetaData is confusing and error-prone
     public static void storeMetadata() throws IOException
     {
         int cfId = 0;
@@ -464,11 +518,6 @@ public class DatabaseDescriptor
                 }
             }
         }
-
-        // Hardcoded system table
-        Table.TableMetadata tmetadata = Table.TableMetadata.instance(Table.SYSTEM_TABLE);
-        tmetadata.add(SystemTable.LOCATION_CF, cfId++);
-        tmetadata.add(HintedHandOffManager.HINTS_CF, cfId++, ColumnFamily.getColumnType("Super"));
     }
 
     public static int getGcGraceInSeconds()
@@ -579,28 +628,6 @@ public class DatabaseDescriptor
         if (cfMetaData == null)
             return 0;
         return cfMetaData.flushPeriodInMinutes;
-    }
-
-    public static boolean isNameSortingEnabled(String tableName, String cfName)
-    {
-        assert tableName != null;
-        CFMetaData cfMetaData = getCFMetaData(tableName, cfName);
-
-        if (cfMetaData == null)
-            return false;
-
-    	return "Name".equals(cfMetaData.indexProperty_);
-    }
-    
-    public static boolean isTimeSortingEnabled(String tableName, String cfName)
-    {
-        assert tableName != null;
-        CFMetaData cfMetaData = getCFMetaData(tableName, cfName);
-
-        if (cfMetaData == null)
-            return false;
-
-        return "Time".equals(cfMetaData.indexProperty_);
     }
 
     public static List<String> getTables()
@@ -764,18 +791,16 @@ public class DatabaseDescriptor
         return dataFileDirectory;
     }
     
-    public static ColumnComparatorFactory.ComparatorType getTypeInfo(String tableName, String cfName)
+    public static AbstractType getComparator(String tableName, String cfName)
     {
         assert tableName != null;
-        CFMetaData cfMetadata = DatabaseDescriptor.getCFMetaData(tableName, cfName);
-        if ( cfMetadata.indexProperty_.equals("Name") )
-        {
-            return ColumnComparatorFactory.ComparatorType.NAME;
-        }
-        else
-        {
-            return ColumnComparatorFactory.ComparatorType.TIMESTAMP;
-        }
+        return getCFMetaData(tableName, cfName).comparator;
+    }
+
+    public static AbstractType getSubComparator(String tableName, String cfName)
+    {
+        assert tableName != null;
+        return getCFMetaData(tableName, cfName).comparator;
     }
 
     public static Map<String, Map<String, CFMetaData>> getTableToColumnFamilyMap()
@@ -799,5 +824,10 @@ public class DatabaseDescriptor
     public static String getListenAddress()
     {
         return listenAddress_;
+    }
+    
+    public static String getThriftAddress()
+    {
+        return thriftAddress_;
     }
 }

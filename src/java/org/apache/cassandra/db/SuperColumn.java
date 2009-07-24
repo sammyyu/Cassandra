@@ -23,49 +23,52 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.Set;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.io.ICompactSerializer;
+import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.MarshalException;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
  */
 
-public final class SuperColumn implements IColumn, Serializable
+public final class SuperColumn implements IColumn
 {
 	private static Logger logger_ = Logger.getLogger(SuperColumn.class);
-	private static SuperColumnSerializer serializer_ = new SuperColumnSerializer();
-	private final static String seperator_ = ":";
 
-    static SuperColumnSerializer serializer()
+    static SuperColumnSerializer serializer(AbstractType comparator)
     {
-        return serializer_;
+        return new SuperColumnSerializer(comparator);
     }
 
-	private String name_;
-    private EfficientBidiMap columns_ = new EfficientBidiMap(ColumnComparatorFactory.getComparator(ColumnComparatorFactory.ComparatorType.TIMESTAMP));
+    private byte[] name_;
+    // TODO make subcolumn comparator configurable
+    private ConcurrentSkipListMap<byte[], IColumn> columns_;
     private int localDeletionTime = Integer.MIN_VALUE;
 	private long markedForDeleteAt = Long.MIN_VALUE;
     private AtomicInteger size_ = new AtomicInteger(0);
 
-    SuperColumn()
-    {
-    }
-
-    SuperColumn(String name)
+    SuperColumn(byte[] name, AbstractType comparator)
     {
     	name_ = name;
+        columns_ = new ConcurrentSkipListMap<byte[], IColumn>(comparator);
+    }
+
+    public AbstractType getComparator()
+    {
+        return (AbstractType)columns_.comparator();
     }
 
     public SuperColumn cloneMeShallow()
     {
-        SuperColumn sc = new SuperColumn(name_);
+        SuperColumn sc = new SuperColumn(name_, getComparator());
         sc.markForDeleteAt(localDeletionTime, markedForDeleteAt);
         return sc;
     }
@@ -75,28 +78,22 @@ public final class SuperColumn implements IColumn, Serializable
 		return markedForDeleteAt > Long.MIN_VALUE;
 	}
 
-    public String name()
+    public byte[] name()
     {
     	return name_;
     }
 
     public Collection<IColumn> getSubColumns()
     {
-    	return columns_.getSortedColumns();
+    	return columns_.values();
     }
 
-    public IColumn getSubColumn(String columnName)
+    public IColumn getSubColumn(byte[] columnName)
     {
         IColumn column = columns_.get(columnName);
         assert column == null || column instanceof Column;
         return column;
     }
-
-    public int compareTo(IColumn superColumn)
-    {
-        return (name_.compareTo(superColumn.name()));
-    }
-
 
     public int size()
     {
@@ -132,7 +129,7 @@ public final class SuperColumn implements IColumn, Serializable
     	 * We need to keep the way we are calculating the column size in sync with the
     	 * way we are calculating the size for the column family serializer.
     	 */
-    	return IColumn.UtfPrefix_ + FBUtilities.getUTF8Length(name_) + DBConstants.boolSize_ + DBConstants.intSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
+    	return IColumn.UtfPrefix_ + name_.length + DBConstants.boolSize_ + DBConstants.intSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
     }
 
     /**
@@ -149,7 +146,7 @@ public final class SuperColumn implements IColumn, Serializable
         return size;
     }
 
-    public void remove(String columnName)
+    public void remove(byte[] columnName)
     {
     	columns_.remove(columnName);
     }
@@ -159,9 +156,9 @@ public final class SuperColumn implements IColumn, Serializable
     	throw new UnsupportedOperationException("This operation is not supported for Super Columns.");
     }
 
-    public long timestamp(String key)
+    public long timestamp(byte[] columnName)
     {
-    	IColumn column = columns_.get(key);
+    	IColumn column = columns_.get(columnName);
     	if ( column instanceof SuperColumn )
     		throw new UnsupportedOperationException("A super column cannot hold other super columns.");
     	if ( column != null )
@@ -174,9 +171,9 @@ public final class SuperColumn implements IColumn, Serializable
     	throw new UnsupportedOperationException("This operation is not supported for Super Columns.");
     }
 
-    public byte[] value(String key)
+    public byte[] value(byte[] columnName)
     {
-    	IColumn column = columns_.get(key);
+    	IColumn column = columns_.get(columnName);
     	if ( column != null )
     		return column.value();
     	throw new IllegalArgumentException("Value was requested for a column that does not exist.");
@@ -186,6 +183,14 @@ public final class SuperColumn implements IColumn, Serializable
     {
     	if (!(column instanceof Column))
     		throw new UnsupportedOperationException("A super column can only contain simple columns.");
+        try
+        {
+            getComparator().validate(column.name());
+        }
+        catch (Exception e)
+        {
+            throw new MarshalException("Invalid column name in supercolumn for " + getComparator().getClass().getName());
+        }
     	IColumn oldColumn = columns_.get(column.name());
     	if ( oldColumn == null )
         {
@@ -212,10 +217,14 @@ public final class SuperColumn implements IColumn, Serializable
      */
     public void putColumn(IColumn column)
     {
-    	if ( !(column instanceof SuperColumn))
-    		throw new UnsupportedOperationException("Only Super column objects should be put here");
-    	if( !name_.equals(column.name()))
-    		throw new IllegalArgumentException("The name should match the name of the current column or super column");
+        if (!(column instanceof SuperColumn))
+        {
+            throw new UnsupportedOperationException("Only Super column objects should be put here");
+        }
+        if (!Arrays.equals(name_, column.name()))
+        {
+            throw new IllegalArgumentException("The name should match the name of the current column or super column");
+        }
 
         for (IColumn subColumn : column.getSubColumns())
         {
@@ -243,7 +252,7 @@ public final class SuperColumn implements IColumn, Serializable
 
     public IColumn diff(IColumn columnNew)
     {
-    	IColumn columnDiff = new SuperColumn(columnNew.name());
+    	IColumn columnDiff = new SuperColumn(columnNew.name(), ((SuperColumn)columnNew).getComparator());
         if (columnNew.getMarkedForDeleteAt() > getMarkedForDeleteAt())
         {
             ((SuperColumn)columnDiff).markForDeleteAt(columnNew.getLocalDeletionTime(), columnNew.getMarkedForDeleteAt());
@@ -277,31 +286,29 @@ public final class SuperColumn implements IColumn, Serializable
 
     public byte[] digest()
     {
-    	Set<IColumn> columns = columns_.getSortedColumns();
     	byte[] xorHash = ArrayUtils.EMPTY_BYTE_ARRAY;
     	if(name_ == null)
     		return xorHash;
-    	xorHash = name_.getBytes();
-    	for(IColumn column : columns)
+    	xorHash = name_.clone();
+    	for(IColumn column : columns_.values())
     	{
 			xorHash = FBUtilities.xor(xorHash, column.digest());
     	}
     	return xorHash;
     }
 
-
-    public String toString()
+    public String getString(AbstractType comparator)
     {
     	StringBuilder sb = new StringBuilder();
         sb.append("SuperColumn(");
-    	sb.append(name_);
+    	sb.append(comparator.getString(name_));
 
         if (isMarkedForDelete()) {
-            sb.append(" -delete at " + getMarkedForDeleteAt() + "-");
+            sb.append(" -delete at ").append(getMarkedForDeleteAt()).append("-");
         }
 
         sb.append(" [");
-        sb.append(StringUtils.join(getSubColumns(), ", "));
+        sb.append(getComparator().getColumnsString(columns_.values()));
         sb.append("])");
 
         return sb.toString();
@@ -321,10 +328,22 @@ public final class SuperColumn implements IColumn, Serializable
 
 class SuperColumnSerializer implements ICompactSerializer<IColumn>
 {
+    private AbstractType comparator;
+
+    public SuperColumnSerializer(AbstractType comparator)
+    {
+        this.comparator = comparator;
+    }
+
+    public AbstractType getComparator()
+    {
+        return comparator;
+    }
+
     public void serialize(IColumn column, DataOutputStream dos) throws IOException
     {
     	SuperColumn superColumn = (SuperColumn)column;
-        dos.writeUTF(superColumn.name());
+        ColumnSerializer.writeName(column.name(), dos);
         dos.writeInt(superColumn.getLocalDeletionTime());
         dos.writeLong(superColumn.getMarkedForDeleteAt());
 
@@ -341,8 +360,8 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
 
     public IColumn deserialize(DataInputStream dis) throws IOException
     {
-        String name = dis.readUTF();
-        SuperColumn superColumn = new SuperColumn(name);
+        byte[] name = ColumnSerializer.readName(dis);
+        SuperColumn superColumn = new SuperColumn(name, comparator);
         superColumn.markForDeleteAt(dis.readInt(), dis.readLong());
         assert dis.available() > 0;
 
@@ -357,5 +376,4 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
         }
         return superColumn;
     }
-
 }
