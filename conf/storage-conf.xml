@@ -38,7 +38,7 @@
          are always time-sorted.
     -->
     <Keyspaces>
-        <Keyspace Name="Keyspace1">
+        <Keyspace Name="Digg">
             <!-- The fraction of keys per sstable whose locations we
                  keep in memory in "mostly LRU" order.  (JUST the key
                  locations, NOT any column values.)
@@ -76,10 +76,7 @@
                  do not prevent commitlog segments from being purged. 
 
             -->
-            <ColumnFamily CompareWith="UTF8Type" Name="Standard1" FlushPeriodInMinutes="60"/>
-            <ColumnFamily CompareWith="UTF8Type" Name="Standard2"/>
-            <ColumnFamily CompareWith="TimeUUIDType" Name="StandardByUUID1"/>
-            <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="Super1"/>
+            <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="FriendActions"/>
         </Keyspace>
     </Keyspaces>
 
