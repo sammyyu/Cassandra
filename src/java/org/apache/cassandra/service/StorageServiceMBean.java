@@ -88,4 +88,6 @@ public interface StorageServiceMBean
      * Remove all the existing snapshots.
      */
     public void clearSnapshot() throws IOException;
+
+    public void forceTableFlushBinary(String tableName) throws IOException;
 }

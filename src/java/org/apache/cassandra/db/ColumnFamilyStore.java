@@ -462,7 +462,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         assert oldMemtable.isFlushed() || oldMemtable.isClean(); 
     }
 
-    void forceFlushBinary()
+    public void forceFlushBinary()
     {
         BinaryMemtableManager.instance().submit(getColumnFamilyName(), binaryMemtable_.get());
     }

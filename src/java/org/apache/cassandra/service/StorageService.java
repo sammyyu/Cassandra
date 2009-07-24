@@ -742,6 +742,21 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             logger_.debug("Cleared out all snapshot directories");
     }
 
+    public void forceTableFlushBinary(String tableName) throws IOException
+    {
+        if (DatabaseDescriptor.getTable(tableName) == null)
+            return;
+        
+        Table table = Table.open(tableName);
+        Set<String> columnFamilies = table.getColumnFamilies();
+        for (String columnFamily : columnFamilies)
+        {
+            ColumnFamilyStore cfStore = table.getColumnFamilyStore(columnFamily);
+            logger_.debug("Forcing flush on table " + tableName + " on CF " + columnFamily);
+            cfStore.forceFlushBinary();
+        }
+    }
+
     /* End of MBean interface methods */
     
     /**
