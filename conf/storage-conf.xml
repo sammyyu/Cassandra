@@ -104,7 +104,7 @@
     <RackAware>false</RackAware>
 
     <!-- Number of replicas of the data-->
-    <ReplicationFactor>1</ReplicationFactor>
+    <ReplicationFactor>3</ReplicationFactor>
 
     <!-- Directories: Specify where Cassandra should store different data on disk
          Keep the data disks and the CommitLog disks separate for best performance
@@ -123,7 +123,9 @@
          You must change this if you are running multiple nodes!
     -->
     <Seeds>
-        <Seed>127.0.0.1</Seed>
+        <Seed>10.2.128.90</Seed>
+        <Seed>10.2.128.88</Seed>
+        <Seed>10.2.128.100</Seed>
     </Seeds>
 
 
@@ -146,7 +148,7 @@
          configured (hostname, name resolution, etc), and the Right
          Thing is to use the address associated with the hostname (it
          might not be). -->
-    <ListenAddress>localhost</ListenAddress>
+    <ListenAddress></ListenAddress>
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
