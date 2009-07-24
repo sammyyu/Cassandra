@@ -1,0 +1,29 @@
+#CASSANDRA_HOME=/opt/cassandra
+#CASSANDRA_CONF=/var/cassandra
+CASSANDRA_HOME=/root/cassandra
+CASSANDRA_CONF=/root/cassandra/conf
+# Arguments to pass to the JVM
+JAVA_OPTIONS=" \
+        -ea \
+        -Xdebug \
+        -Xrunjdwp:transport=dt_socket,server=y,address=8888,suspend=n \
+        -Xms128M \
+        -Xmx1G \
+        -XX:SurvivorRatio=8 \
+        -XX:TargetSurvivorRatio=90 \
+        -XX:+AggressiveOpts \
+        -XX:+UseParNewGC \
+        -XX:+UseConcMarkSweepGC \
+        -XX:CMSInitiatingOccupancyFraction=1 \
+        -XX:+CMSParallelRemarkEnabled \
+        -XX:+HeapDumpOnOutOfMemoryError \
+        -Dcom.sun.management.jmxremote.port=8080 \
+        -Dcom.sun.management.jmxremote.ssl=false \
+        -Dcom.sun.management.jmxremote.authenticate=false"
+
+IP=`/sbin/ifconfig eth0 | grep "inet addr" | awk -F: '{print $2}' | awk '{print $1}'`
+JAVA_OPTIONS="$JAVA_OPTIONS -Dcom.sun.management.jmxremote.port=8081 -Djava.rmi.server.hostname=${IP}"
+JMETRIX_PATH="$CASSANDRA_HOME/jmxetric-0.0.3"
+CLASSPATH=$CLASSPATH:"$JMETRIX_PATH/oncrpc-1.0.7.jar"
+JMETRIX_CONFIG="host=239.2.11.71,port=8649,wireformat31x=true,config=$JMETRIX_PATH/etc/cassandra.xml"
+JAVA_OPTIONS="$JAVA_OPTIONS -javaagent:$JMETRIX_PATH/jmxetric-0.0.3.jar=$JMETRIX_CONFIG"
