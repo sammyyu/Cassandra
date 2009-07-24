@@ -51,37 +51,7 @@
 		<mbean name="java.lang:type=OperatingSystem" pname="OS" >
 			<attribute name="ProcessCpuTime" type="int32" slope="positive"/>
 		</mbean>
-		<mbean name="org.apache.cassandra.db:type=ColumnFamilyStores,name=Digg,columnfamily=Items" pname="Digg.Items" >
-			<attribute name="MemtableColumnsCount" type="int32" slope="both"/>
-			<attribute name="MemtableDataSize" type="int32" slope="both"/>
-			<attribute name="MemtableSwitchCount" type="int32" slope="both"/>
-			<attribute name="ReadCount" type="int32" slope="both"/>
-			<attribute name="WriteCount" type="int32" slope="both"/>
-			<attribute name="ReadLatency" type="float" slope="both"/>
-			<attribute name="WriteLatency" type="float" slope="both"/>
-			<attribute name="PendingTasks" type="int32" slope="both"/>
-		</mbean>
-		<mbean name="org.apache.cassandra.db:type=ColumnFamilyStores,name=Digg,columnfamily=ItemViews" pname="Digg.ItemViews" >
-			<attribute name="MemtableColumnsCount" type="int32" slope="both"/>
-			<attribute name="MemtableDataSize" type="int32" slope="both"/>
-			<attribute name="MemtableSwitchCount" type="int32" slope="both"/>
-			<attribute name="ReadCount" type="int32" slope="both"/>
-			<attribute name="WriteCount" type="int32" slope="both"/>
-			<attribute name="ReadLatency" type="float" slope="both"/>
-			<attribute name="WriteLatency" type="float" slope="both"/>
-			<attribute name="PendingTasks" type="int32" slope="both"/>
-		</mbean>
-		<mbean name="org.apache.cassandra.db:type=ColumnFamilyStores,name=Digg,columnfamily=Comments" pname="Digg.Comments" >
-			<attribute name="MemtableColumnsCount" type="int32" slope="both"/>
-			<attribute name="MemtableDataSize" type="int32" slope="both"/>
-			<attribute name="MemtableSwitchCount" type="int32" slope="both"/>
-			<attribute name="ReadCount" type="int32" slope="both"/>
-			<attribute name="WriteCount" type="int32" slope="both"/>
-			<attribute name="ReadLatency" type="float" slope="both"/>
-			<attribute name="WriteLatency" type="float" slope="both"/>
-			<attribute name="PendingTasks" type="int32" slope="both"/>
-		</mbean>
-		<mbean name="org.apache.cassandra.db:type=ColumnFamilyStores,name=Digg,columnfamily=CommentViews" pname="Digg.CommentViews" >
+		<mbean name="org.apache.cassandra.db:type=ColumnFamilyStores,name=Digg,columnfamily=FriendActions" pname="Digg.FriendActions" >
 			<attribute name="MemtableColumnsCount" type="int32" slope="both"/>
 			<attribute name="MemtableDataSize" type="int32" slope="both"/>
 			<attribute name="MemtableSwitchCount" type="int32" slope="both"/>
