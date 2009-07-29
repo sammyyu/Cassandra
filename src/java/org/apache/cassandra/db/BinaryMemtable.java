@@ -153,7 +153,7 @@ public class BinaryMemtable
         {
             public int compare(String o1, String o2)
             {
-                return dc.compare(partitioner.decorateKey(o1), partitioner.decorateKey(o2));
+                return dc.compare(o1, o2);
             }
         });
         
@@ -164,7 +164,7 @@ public class BinaryMemtable
             if ( bytes.length > 0 )
             {            	
                 /* Now write the key and value to disk */
-                writer.append(partitioner.decorateKey(key), bytes);
+                writer.append(key, bytes);
             }
         }
         cfStore.storeLocation(writer.closeAndOpenReader(DatabaseDescriptor.getKeysCachedFraction(table_)));
