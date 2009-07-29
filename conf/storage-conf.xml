@@ -123,9 +123,10 @@
          You must change this if you are running multiple nodes!
     -->
     <Seeds>
-        <Seed>10.2.128.90</Seed>
+  <!--      <Seed>10.2.128.90</Seed>
         <Seed>10.2.128.88</Seed>
-        <Seed>10.2.128.100</Seed>
+  -->
+       <Seed>10.2.128.100</Seed>
     </Seeds>
 
 
@@ -148,7 +149,7 @@
          configured (hostname, name resolution, etc), and the Right
          Thing is to use the address associated with the hostname (it
          might not be). -->
-    <ListenAddress></ListenAddress>
+    <ListenAddress>10.2.128.100</ListenAddress>
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
