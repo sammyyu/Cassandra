@@ -242,11 +242,19 @@ public class NodeProbe
     /**
      * Trigger compaction of all tables.
      */
+    public void forceTableFlushBinary(String tableName) throws IOException
+    {
+        ssProxy.forceTableFlushBinary(tableName);
+    }
+
+    /**
+     * Trigger a binary flush on CFs of a table.
+     */
     public void forceTableCompaction() throws IOException
     {
         ssProxy.forceTableCompaction();
     }
-    
+
     /**
      * Write a textual representation of the Cassandra ring.
      * 
@@ -454,7 +462,7 @@ public class NodeProbe
     {
         HelpFormatter hf = new HelpFormatter();
         String header = String.format(
-                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats");
+                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats flush_binary");
         String usage = String.format("java %s -host <arg> <command>%n", NodeProbe.class.getName());
         hf.printHelp(usage, "", options, header);
     }
@@ -514,6 +522,16 @@ public class NodeProbe
         else if (cmdName.equals("cfstats"))
         {
             probe.printColumnFamilyStats(System.out);
+        }
+        else if (cmdName.equals("flush_binary"))
+        {
+            if (probe.getArgs().length < 2)
+            {
+                System.err.println("Missing table name argument.");
+                NodeProbe.printUsage();
+                System.exit(1);
+            }
+            probe.forceTableFlushBinary(probe.getArgs()[1]);
         }
         else
         {

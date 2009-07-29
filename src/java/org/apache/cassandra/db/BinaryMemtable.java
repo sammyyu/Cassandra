@@ -34,6 +34,8 @@ import org.apache.cassandra.config.DatabaseDescriptor;
 
 import org.apache.log4j.Logger;
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
+import java.util.*;
+import org.apache.cassandra.dht.IPartitioner;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -145,7 +147,16 @@ public class BinaryMemtable
         ColumnFamilyStore cfStore = Table.open(table_).getColumnFamilyStore(cfName_);
         List<String> keys = new ArrayList<String>( columnFamilies_.keySet() );
         SSTableWriter writer = new SSTableWriter(cfStore.getTempSSTablePath(), keys.size(), StorageService.getPartitioner());
-        Collections.sort(keys);
+        final IPartitioner partitioner = StorageService.getPartitioner();
+        final Comparator<String> dc = partitioner.getDecoratedKeyComparator();
+        Collections.sort(keys, new Comparator<String>()
+        {
+            public int compare(String o1, String o2)
+            {
+                return dc.compare(o1, o2);
+            }
+        });
+        
         /* Use this BloomFilter to decide if a key exists in a SSTable */
         for ( String key : keys )
         {           

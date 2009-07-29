@@ -66,4 +66,5 @@ public interface StorageServiceMBean
      * @param target endpoint receiving data.
     */
     public void forceHandoff(List<String> directories, String target) throws IOException;
+    public void forceTableFlushBinary(String tableName) throws IOException;
 }
