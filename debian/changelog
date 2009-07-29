@@ -1,0 +1,12 @@
+cassandra (0.3.0-2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Switch to using Sun Java 
+
+ -- Jeremy Grosser <synack@digg.com>  Wed, 29 Jul 2009 12:03:11 -0700
+
+cassandra (0.3.0-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Eric Evans <eevans@apache.org>  Sun, 26 Jul 2009 13:04:09 +0000
