@@ -164,7 +164,7 @@ public class BinaryMemtable
             if ( bytes.length > 0 )
             {            	
                 /* Now write the key and value to disk */
-                writer.append(key, bytes);
+                writer.append(partitioner.decorateKey(key), bytes);
             }
         }
         cfStore.storeLocation(writer.closeAndOpenReader(DatabaseDescriptor.getKeysCachedFraction(table_)));

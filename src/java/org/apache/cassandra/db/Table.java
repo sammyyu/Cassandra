@@ -631,19 +631,19 @@ public class Table
         }
     }
 
+
     // for binary load path.  skips commitlog.
     void load(Row row) throws IOException
     {
         String key = row.key();
-                
         for (ColumnFamily columnFamily : row.getColumnFamilies())
         {
             Collection<IColumn> columns = columnFamily.getSortedColumns();
             for(IColumn column : columns)
             {
-                ColumnFamilyStore cfStore = columnFamilyStores_.get(column.name());
+                ColumnFamilyStore cfStore = columnFamilyStores_.get(new String(column.name(),"UTF-8"));
                 cfStore.applyBinary(key, column.value());
-        	}
+            }
         }
         row.clear();
     }
