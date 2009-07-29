@@ -18,7 +18,7 @@ public class SSTableWriter extends SSTable
     private static Logger logger = Logger.getLogger(SSTableWriter.class);
 
     private long keysWritten;
-    private IFileWriter dataWriter;
+    private AbstractWriter dataWriter;
     private BufferedRandomAccessFile indexRAF;
     private String lastWrittenKey;
     private BloomFilter bf;
@@ -55,7 +55,8 @@ public class SSTableWriter extends SSTable
         long indexPosition = indexRAF.getFilePointer();
         indexRAF.writeUTF(decoratedKey);
         indexRAF.writeLong(position);
-        logger.trace("wrote " + decoratedKey + " at " + position);
+        if (logger.isTraceEnabled())
+            logger.trace("wrote " + decoratedKey + " at " + position);
 
         if (keysWritten++ % INDEX_INTERVAL != 0)
             return;
@@ -64,7 +65,8 @@ public class SSTableWriter extends SSTable
             indexPositions = new ArrayList<KeyPosition>();
         }
         indexPositions.add(new KeyPosition(decoratedKey, indexPosition));
-        logger.trace("wrote index of " + decoratedKey + " at " + indexPosition);
+        if (logger.isTraceEnabled())
+            logger.trace("wrote index of " + decoratedKey + " at " + indexPosition);
     }
 
     // TODO make this take a DataOutputStream and wrap the byte[] version to combine them

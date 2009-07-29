@@ -96,12 +96,23 @@
          clusters with a small number of nodes. -->
     <InitialToken></InitialToken>
 
-    <!-- RackAware: Setting this to true instructs Cassandra to try
-         and place one replica in a different datacenter, and the
-         others on different racks in the same one.  If you haven't
-         looked at the code for RackAwareStrategy, leave this off.
+	
+    <!-- EndPointSnitch: Setting this to the class that implements IEndPointSnitch
+	     which will see if two endpoints are in the same data center or on the same rack.
+         Out of the box, Cassandra provides
+         org.apache.cassandra.locator.EndPointSnitch
     -->
-    <RackAware>false</RackAware>
+    <EndPointSnitch>org.apache.cassandra.locator.EndPointSnitch</EndPointSnitch>
+
+    <!-- Strategy: Setting this to the class that implements IReplicaPlacementStrategy
+	     will change the way the node picker works.
+         Out of the box, Cassandra provides
+         org.apache.cassandra.locator.RackUnawareStrategy
+         org.apache.cassandra.locator.RackAwareStrategy 
+		 (place one replica in a different datacenter, and the
+         others on different racks in the same one.)
+    -->
+    <ReplicaPlacementStrategy>org.apache.cassandra.locator.RackUnawareStrategy</ReplicaPlacementStrategy>
 
     <!-- Number of replicas of the data-->
     <ReplicationFactor>3</ReplicationFactor>
@@ -188,7 +199,36 @@
       before flushing to disk.  This is also a per-memtable setting.
       Use with MemtableSizeInMB to tune memory usage.
     -->
-    <MemtableObjectCountInMillions>0.02</MemtableObjectCountInMillions>
+    <MemtableObjectCountInMillions>0.01</MemtableObjectCountInMillions>
+
+    <!-- Unlike most systems, in Cassandra writes are faster than
+         reads, so you can afford more of those in parallel.
+	 A good rule of thumb is 2 concurrent reads per processor core.
+         You especially want more concurrentwrites if you are using
+         CommitLogSync + CommitLogSyncDelay. -->
+    <ConcurrentReads>8</ConcurrentReads>
+    <ConcurrentWrites>32</ConcurrentWrites>
+
+    <!-- Turn on CommitLogSync to improve durability.
+         When enabled, Cassandra won't ack writes until the commit log
+         has been synced to disk.  This is less necessary in Cassandra
+         than in traditional databases since replication reduces the
+         odds of losing data from a failure after writing the log
+         entry but before it actually reaches the disk.
+    -->
+    <CommitLogSync>false</CommitLogSync>
+    <!-- Delay (in microseconds) during which additional commit log
+         entries may be written before fsync.  This will increase
+         latency slightly, but can vastly improve throughput where
+         there are many writers.  Set to zero to disable
+         (each entry will be synced individually).
+	 Reasonable values range from a minimal 100 to even 10000
+         if throughput matters more than latency.  (10000us = 10ms
+         write latency isn't even that bad by traditional db
+         standards.)
+    -->
+    <CommitLogSyncDelay>1000</CommitLogSyncDelay>
+         
 
     <!-- Time to wait before garbage-collection deletion markers.
          Set this to a large enough value that you are confident

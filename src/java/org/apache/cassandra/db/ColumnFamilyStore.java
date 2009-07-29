@@ -46,7 +46,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.collections.IteratorUtils;
 
 import org.cliffc.high_scale_lib.NonBlockingHashMap;
-import org.cliffc.high_scale_lib.NonBlockingHashSet;
+
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -394,13 +394,19 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                              columnFamily_, SSTable.TEMPFILE_MARKER, index);
     }
 
-    void switchMemtable()
+    void switchMemtable(Memtable oldMemtable, CommitLog.CommitLogContext ctx)
     {
         memtableLock_.writeLock().lock();
         try
         {
+            if (oldMemtable.isFrozen())
+            {
+                return;
+            }
             logger_.info(columnFamily_ + " has reached its threshold; switching in a fresh Memtable");
-            getMemtablesPendingFlushNotNull(columnFamily_).add(memtable_); // it's ok for the MT to briefly be both active and pendingFlush
+            oldMemtable.freeze();
+            getMemtablesPendingFlushNotNull(columnFamily_).add(oldMemtable); // it's ok for the MT to briefly be both active and pendingFlush
+            submitFlush(oldMemtable, ctx);
             memtable_ = new Memtable(table_, columnFamily_);
         }
         finally
@@ -423,13 +429,25 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     public void forceFlush()
     {
-        memtable_.forceflush();
+        if (memtable_.isClean())
+            return;
+
+        CommitLog.CommitLogContext ctx = null;
+        try
+        {
+            ctx = CommitLog.open().getContext();
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+        switchMemtable(memtable_, ctx);
     }
 
     void forceBlockingFlush() throws IOException, ExecutionException, InterruptedException
     {
         Memtable oldMemtable = getMemtableThreadSafe();
-        oldMemtable.forceflush();
+        forceFlush();
         // block for flush to finish by adding a no-op action to the flush executorservice
         // and waiting for that to finish.  (this works since flush ES is single-threaded.)
         Future f = flusher_.submit(new Runnable()
@@ -463,8 +481,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         Memtable initialMemtable = getMemtableThreadSafe();
         if (initialMemtable.isThresholdViolated())
         {
-            switchMemtable();
-            initialMemtable.enqueueFlush(cLogCtx);
+            switchMemtable(initialMemtable, cLogCtx);
         }
         memtableLock_.writeLock().lock();
         try
@@ -1072,9 +1089,9 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         if (logger_.isDebugEnabled())
         {
             logger_.debug("Total time taken for range split   ..." + (System.currentTimeMillis() - startTime));
-          logger_.debug("Total bytes Read for range split  ..." + totalBytesRead);
-        logger_.debug("Total bytes written for range split  ..."
-                      + totalBytesWritten + "   Total keys read ..." + totalkeysRead);
+            logger_.debug("Total bytes Read for range split  ..." + totalBytesRead);
+            logger_.debug("Total bytes written for range split  ..."
+                          + totalBytesWritten + "   Total keys read ..." + totalkeysRead);
         }
         return result;
     }
@@ -1277,14 +1294,14 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         Set<Memtable> memtables = memtablesPendingFlush.get(columnFamilyName);
         if (memtables == null)
         {
-            memtablesPendingFlush.putIfAbsent(columnFamilyName, new NonBlockingHashSet<Memtable>());
+            memtablesPendingFlush.putIfAbsent(columnFamilyName, new ConcurrentSkipListSet<Memtable>());
             memtables = memtablesPendingFlush.get(columnFamilyName); // might not be the object we just put, if there was a race!
         }
         return memtables;
     }
 
     /* Submit memtables to be flushed to disk */
-    public static void submitFlush(final Memtable memtable, final CommitLog.CommitLogContext cLogCtx)
+    private static void submitFlush(final Memtable memtable, final CommitLog.CommitLogContext cLogCtx)
     {
         logger_.info("Enqueuing flush of " + memtable);
         flusher_.submit(new Runnable()
@@ -1520,6 +1537,37 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     public AbstractType getComparator()
     {
         return DatabaseDescriptor.getComparator(table_, columnFamily_);
+    }
+
+    /**
+     * Take a snap shot of this columnfamily store.
+     * 
+     * @param snapshotName the name of the associated with the snapshot 
+     */
+    public void snapshot(String snapshotName) throws IOException
+    {
+        sstableLock_.readLock().lock();
+        try
+        {
+            for (String filename : new ArrayList<String>(ssTables_.keySet()))
+            {
+                File sourceFile = new File(filename);
+
+                File dataDirectory = sourceFile.getParentFile().getParentFile();
+                String snapshotDirectoryPath = Table.getSnapshotPath(dataDirectory.getAbsolutePath(), table_, snapshotName);
+                FileUtils.createDirectory(snapshotDirectoryPath);
+
+                File targetLink = new File(snapshotDirectoryPath, sourceFile.getName());
+                FileUtils.createHardLink(new File(filename), targetLink);
+                if (logger_.isDebugEnabled())
+                    logger_.debug("Snapshot for " + table_ + " table data file " + sourceFile.getAbsolutePath() +    
+                        " created as " + targetLink.getAbsolutePath());
+            }
+        }
+        finally
+        {
+            sstableLock_.readLock().unlock();
+        }
     }
 
     /**

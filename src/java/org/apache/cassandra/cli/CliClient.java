@@ -138,7 +138,7 @@ public class CliClient
         {
             // table.cf['key']
         	List<Column> columns = new ArrayList<Column>();
-      		columns = thriftClient_.get_slice(tableName, key, new ColumnParent(columnFamily, null), ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, 1000000);
+      		columns = thriftClient_.get_slice(tableName, key, new ColumnParent(columnFamily, null), ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, 1000000, ConsistencyLevel.ONE);
             int size = columns.size();
             for (Iterator<Column> colIter = columns.iterator(); colIter.hasNext(); )
             {
@@ -156,7 +156,7 @@ public class CliClient
             Column column = new Column();
             try
             {
-                column = thriftClient_.get_column(tableName, key, new ColumnPath(columnFamily, null, columnName.getBytes("UTF-8")));
+                column = thriftClient_.get_column(tableName, key, new ColumnPath(columnFamily, null, columnName.getBytes("UTF-8")), ConsistencyLevel.ONE);
             }
             catch (UnsupportedEncodingException e)
             {
@@ -197,7 +197,7 @@ public class CliClient
             try
             {
                 thriftClient_.insert(tableName, key, new ColumnPath(columnFamily, null, columnName.getBytes("UTF-8")),
-                                     value.getBytes(), System.currentTimeMillis(), 1);
+                                 value.getBytes(), System.currentTimeMillis(), ConsistencyLevel.ONE);
             }
             catch (UnsupportedEncodingException e)
             {
@@ -218,7 +218,7 @@ public class CliClient
         if (!CliMain.isConnected())
             return;
 
-        String propertyValue = thriftClient_.getStringProperty(propertyName);
+        String propertyValue = thriftClient_.get_string_property(propertyName);
         css_.out.println(propertyValue);
         return;
     }
@@ -229,7 +229,7 @@ public class CliClient
         if (!CliMain.isConnected())
             return;
         
-        List<String> tables = thriftClient_.getStringListProperty("tables");
+        List<String> tables = thriftClient_.get_string_list_property("tables");
         for (String table : tables)
         {
             css_.out.println(table);
@@ -250,13 +250,13 @@ public class CliClient
         // Describe and display
         Map<String, Map<String, String>> columnFamiliesMap;
         try {
-            columnFamiliesMap = thriftClient_.describeTable(tableName);
+            columnFamiliesMap = thriftClient_.describe_table(tableName);
             for (String columnFamilyName: columnFamiliesMap.keySet()) {
                 Map<String, String> columnMap = columnFamiliesMap.get(columnFamilyName);
-                String desc = columnMap.get("desc");
-                String columnFamilyType = columnMap.get("type");
-                String sort = columnMap.get("sort");
-                Integer flushperiod = Integer.parseInt(columnMap.get("flushperiod"));
+                String desc = columnMap.get("Desc");
+                String columnFamilyType = columnMap.get("Type");
+                String sort = columnMap.get("CompareWith");
+		 String flushperiod = columnMap.get("FlushPeriodInMinutes");
                 css_.out.println(desc);
                 css_.out.println("Column Family Type: " + columnFamilyType);
                 css_.out.println("Column Sorted By: " + sort);
@@ -299,7 +299,7 @@ public class CliClient
         if (!CliMain.isConnected())
             return;
         
-        CqlResult result = thriftClient_.executeQuery(query);
+        CqlResult result = thriftClient_.execute_query(query);
         
         if (result == null)
         {

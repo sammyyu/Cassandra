@@ -150,7 +150,7 @@ public class StorageProxy implements StorageProxyMBean
         }
     }
     
-    public static void insertBlocking(RowMutation rm, int blockFor) throws UnavailableException
+    public static void insertBlocking(RowMutation rm, int consistency_level) throws UnavailableException
     {
         long startTime = System.currentTimeMillis();
         Message message = null;
@@ -169,8 +169,26 @@ public class StorageProxy implements StorageProxyMBean
             {
                 throw new UnavailableException();
             }
+            int blockFor;
+            if (consistency_level == ConsistencyLevel.ONE)
+            {
+                blockFor = 1;
+            }
+            else if (consistency_level == ConsistencyLevel.QUORUM)
+            {
+                blockFor = (DatabaseDescriptor.getReplicationFactor() >> 1) + 1;
+            }
+            else if (consistency_level == ConsistencyLevel.ALL)
+            {
+                blockFor = DatabaseDescriptor.getReplicationFactor();
+            }
+            else
+            {
+                throw new UnsupportedOperationException("invalid consistency level " + consistency_level);
+            }
             QuorumResponseHandler<Boolean> quorumResponseHandler = new QuorumResponseHandler<Boolean>(blockFor, new WriteResponseResolver());
-            logger.debug("insertBlocking writing key " + rm.key() + " to " + message.getMessageId() + "@[" + StringUtils.join(endpoints, ", ") + "]");
+            if (logger.isDebugEnabled())
+                logger.debug("insertBlocking writing key " + rm.key() + " to " + message.getMessageId() + "@[" + StringUtils.join(endpoints, ", ") + "]");
 
             MessagingService.getMessagingInstance().sendRR(message, endpoints, quorumResponseHandler);
             if (!quorumResponseHandler.get())
@@ -189,7 +207,7 @@ public class StorageProxy implements StorageProxyMBean
 
     public static void insertBlocking(RowMutation rm) throws UnavailableException
     {
-        insertBlocking(rm, (DatabaseDescriptor.getReplicationFactor() >> 1) + 1);
+        insertBlocking(rm, ConsistencyLevel.QUORUM);
     }
     
     private static Map<String, Message> constructMessages(Map<String, ReadCommand> readMessages) throws IOException
@@ -264,7 +282,8 @@ public class StorageProxy implements StorageProxyMBean
         EndPoint endPoint = StorageService.instance().findSuitableEndPoint(command.key);
         assert endPoint != null;
         Message message = command.makeReadMessage();
-        logger.debug("weakreadremote reading " + command + " from " + message.getMessageId() + "@" + endPoint);
+        if (logger.isDebugEnabled())
+            logger.debug("weakreadremote reading " + command + " from " + message.getMessageId() + "@" + endPoint);
         message.addHeader(ReadCommand.DO_REPAIR, ReadCommand.DO_REPAIR.getBytes());
         IAsyncResult iar = MessagingService.getMessagingInstance().sendRR(message, endPoint);
         byte[] body;
@@ -287,7 +306,7 @@ public class StorageProxy implements StorageProxyMBean
      * Performs the actual reading of a row out of the StorageService, fetching
      * a specific set of column names from a given column family.
      */
-    public static Row readProtocol(ReadCommand command, StorageService.ConsistencyLevel consistencyLevel)
+    public static Row readProtocol(ReadCommand command, int consistency_level)
     throws IOException, TimeoutException, InvalidRequestException
     {
         long startTime = System.currentTimeMillis();
@@ -295,7 +314,7 @@ public class StorageProxy implements StorageProxyMBean
         Row row;
         EndPoint[] endpoints = StorageService.instance().getNStorageEndPoint(command.key);
 
-        if (consistencyLevel == StorageService.ConsistencyLevel.WEAK)
+        if (consistency_level == ConsistencyLevel.ONE)
         {
             boolean foundLocal = Arrays.asList(endpoints).contains(StorageService.getLocalStorageEndPoint());
             if (foundLocal)
@@ -309,7 +328,7 @@ public class StorageProxy implements StorageProxyMBean
         }
         else
         {
-            assert consistencyLevel == StorageService.ConsistencyLevel.STRONG;
+            assert consistency_level == ConsistencyLevel.QUORUM;
             row = strongRead(command);
         }
 
@@ -407,13 +426,15 @@ public class StorageProxy implements StorageProxyMBean
         */
         endPoints[0] = dataPoint;
         messages[0] = message;
-        logger.debug("strongread reading data for " + command + " from " + message.getMessageId() + "@" + dataPoint);
+        if (logger.isDebugEnabled())
+            logger.debug("strongread reading data for " + command + " from " + message.getMessageId() + "@" + dataPoint);
         for (int i = 1; i < endPoints.length; i++)
         {
             EndPoint digestPoint = endpointList.get(i - 1);
             endPoints[i] = digestPoint;
             messages[i] = messageDigestOnly;
-            logger.debug("strongread reading digest for " + command + " from " + messageDigestOnly.getMessageId() + "@" + digestPoint);
+            if (logger.isDebugEnabled())
+                logger.debug("strongread reading digest for " + command + " from " + messageDigestOnly.getMessageId() + "@" + digestPoint);
         }
 
         try
@@ -422,7 +443,8 @@ public class StorageProxy implements StorageProxyMBean
 
             long startTime2 = System.currentTimeMillis();
             row = quorumResponseHandler.get();
-            logger.debug("quorumResponseHandler: " + (System.currentTimeMillis() - startTime2) + " ms.");
+            if (logger.isDebugEnabled())
+                logger.debug("quorumResponseHandler: " + (System.currentTimeMillis() - startTime2) + " ms.");
         }
         catch (DigestMismatchException ex)
         {
@@ -590,7 +612,8 @@ public class StorageProxy implements StorageProxyMBean
     */
     private static Row weakReadLocal(ReadCommand command) throws IOException
     {
-        logger.debug("weakreadlocal reading " + command);
+        if (logger.isDebugEnabled())
+            logger.debug("weakreadlocal reading " + command);
         List<EndPoint> endpoints = StorageService.instance().getNLiveStorageEndPoint(command.key);
         /* Remove the local storage endpoint from the list. */
         endpoints.remove(StorageService.getLocalStorageEndPoint());
