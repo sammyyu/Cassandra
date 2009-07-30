@@ -110,7 +110,10 @@
          Out of the box, Cassandra provides
          org.apache.cassandra.locator.EndPointSnitch
     -->
+<!--
     <EndPointSnitch>org.apache.cassandra.locator.EndPointSnitch</EndPointSnitch>
+-->
+    <EndPointSnitch>com.digg.cassandra.locator.DiggEndPointSnitch</EndPointSnitch>
 
     <!-- Strategy: Setting this to the class that implements IReplicaPlacementStrategy
 	     will change the way the node picker works.
@@ -128,10 +131,9 @@
     <!-- Directories: Specify where Cassandra should store different data on disk
          Keep the data disks and the CommitLog disks separate for best performance
     -->
-    <CommitLogDirectory>/mnt1/cassandra/commitlog</CommitLogDirectory>
+    <CommitLogDirectory>/var/cassandra/commitlog</CommitLogDirectory>
     <DataFileDirectories>
-        <DataFileDirectory>/mnt1/cassandra/data</DataFileDirectory>
-        <DataFileDirectory>/mnt2/cassandra/data</DataFileDirectory>
+        <DataFileDirectory>/var/cassandra/data</DataFileDirectory>
     </DataFileDirectories>
     <CalloutLocation>/var/cassandra/callouts</CalloutLocation>
     <BootstrapFileDirectory>/var/cassandra/bootstrap</BootstrapFileDirectory>
@@ -145,8 +147,8 @@
     <Seeds>
   <!--      <Seed>10.2.128.90</Seed>
         <Seed>10.2.128.88</Seed>
-  -->
        <Seed>10.2.128.100</Seed>
+  -->
     </Seeds>
 
 
@@ -169,7 +171,7 @@
          configured (hostname, name resolution, etc), and the Right
          Thing is to use the address associated with the hostname (it
          might not be). -->
-    <ListenAddress>10.2.128.100</ListenAddress>
+    <ListenAddress>10.2.128.93</ListenAddress>
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->

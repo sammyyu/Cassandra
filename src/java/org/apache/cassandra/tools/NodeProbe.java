@@ -51,7 +51,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
-import com.digg.cassandra.DiggEndPointSnitchMBean;
+import com.digg.cassandra.locator.DiggEndPointSnitchMBean;
 
 /**
  * JMX client operations for Cassandra.
@@ -472,7 +472,7 @@ public class NodeProbe
     {
         try {
             DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
-                mbeanServerConn, new ObjectName("com.digg.cassandra.service:type=EndPointSnitch"), DiggEndPointSnitchMBean.class);
+                mbeanServerConn, new ObjectName(DiggEndPointSnitchMBean.MBEAN_OBJECT_NAME), DiggEndPointSnitchMBean.class);
             outs.println(snitchProxy.displayConfiguration());
         }
         catch (MalformedObjectNameException e)
@@ -489,7 +489,7 @@ public class NodeProbe
     {
         try {
             DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
-                mbeanServerConn, new ObjectName("com.digg.cassandra.service:type=EndPointSnitch"), DiggEndPointSnitchMBean.class);
+                mbeanServerConn, new ObjectName(DiggEndPointSnitchMBean.MBEAN_OBJECT_NAME), DiggEndPointSnitchMBean.class);
             snitchProxy.reloadConfiguration();
         }
         catch (MalformedObjectNameException e)

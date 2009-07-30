@@ -1,4 +1,4 @@
-package com.digg.cassandra;
+package com.digg.cassandra.locator;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -26,17 +26,32 @@ import org.apache.log4j.Logger;
  * 
  */
 public class DiggEndPointSnitch extends EndPointSnitch implements DiggEndPointSnitchMBean {
+    /**
+     * A list of properties with keys being host:port and values being datacenter:rack
+     */
     private Properties hostProperties = new Properties();
     
+    /**
+     * The default rack property file to be read.
+     */
+    private static String DEFAULT_RACK_PROPERTY_FILE = "/etc/cassandra/rack.properties"; 
+
+    /**
+     * Whether to use the parent for detection of same node
+     */
+    private boolean runInBaseMode = false;
+    
+    /**
+     * Reference to the logger.
+     */
     private static Logger logger_ = Logger.getLogger(DiggEndPointSnitch.class);     
 
-    public DiggEndPointSnitch() throws FileNotFoundException, IOException {
+    public DiggEndPointSnitch() throws IOException {
         reloadConfiguration();
         try
         {
             MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-            mbs.registerMBean(this, new ObjectName(
-                    "com.digg.cassandra.service:type=EndPointSnitch"));
+            mbs.registerMBean(this, new ObjectName(MBEAN_OBJECT_NAME));
         }
         catch (Exception e)
         {
@@ -44,10 +59,18 @@ public class DiggEndPointSnitch extends EndPointSnitch implements DiggEndPointSn
         }
     }
 
+    /**
+     * Get the raw information about an end point
+     * 
+     * @param endPoint endPoint to process
+     * 
+     * @return a array of string with the first index being the data center and the second being the rack
+     */
     public String[] getEndPointInfo(EndPoint endPoint) {
         String key = endPoint.toString();
         String value = hostProperties.getProperty(key);
-        if (value == null) {
+        if (value == null)
+        {
             logger_.error("Could not find end point information for " + key + ", will use default.");
             value = hostProperties.getProperty("default");
         }
@@ -74,6 +97,7 @@ public class DiggEndPointSnitch extends EndPointSnitch implements DiggEndPointSn
      * Return the rack for which an endpoint resides in
      *  
      * @param endPoint the endPoint to process
+     * 
      * @return string of rack
      */
     public String getRackForEndPoint(EndPoint endPoint) {
@@ -83,13 +107,22 @@ public class DiggEndPointSnitch extends EndPointSnitch implements DiggEndPointSn
     @Override
     public boolean isInSameDataCenter(EndPoint host, EndPoint host2)
             throws UnknownHostException {
+        if (runInBaseMode) 
+        {
+            return super.isInSameDataCenter(host, host2);
+        }
         return getDataCenterForEndPoint(host).equals(getDataCenterForEndPoint(host2));
     }
 
     @Override
     public boolean isOnSameRack(EndPoint host, EndPoint host2)
             throws UnknownHostException {
-        if (!isInSameDataCenter(host, host2)) {
+        if (runInBaseMode) 
+        {
+            return super.isOnSameRack(host, host2);
+        }
+        if (!isInSameDataCenter(host, host2)) 
+        {
             return false;
         }
         return getRackForEndPoint(host).equals(getRackForEndPoint(host2)); 
@@ -105,18 +138,20 @@ public class DiggEndPointSnitch extends EndPointSnitch implements DiggEndPointSn
         }
         return configurationString.toString();
     }
-
+    
     @Override
     public void reloadConfiguration() throws IOException {        
-        String rackPropertyFilename = "/etc/cassandra/rack.properties";
-        try {
+        String rackPropertyFilename = System.getProperty("rackFile", DEFAULT_RACK_PROPERTY_FILE);
+        try 
+        {
             Properties localHostProperties = new Properties();
             localHostProperties.load(new FileReader(rackPropertyFilename));
             hostProperties = localHostProperties;
+            runInBaseMode = false;
         }
         catch (FileNotFoundException fnfe) {
-            logger_.error("Could not find " + rackPropertyFilename, fnfe);
-            throw fnfe;
+            logger_.error("Could not find " + rackPropertyFilename + ", using default EndPointSnitch", fnfe);
+            runInBaseMode = true;
         }
         catch (IOException ioe) {
             logger_.error("Could not process " + rackPropertyFilename, ioe);

@@ -1,4 +1,4 @@
-package com.digg.cassandra;
+package com.digg.cassandra.locator;
 
 import java.io.IOException;
 
@@ -12,6 +12,10 @@ import java.io.IOException;
  */
 
 public interface DiggEndPointSnitchMBean {
+    /**
+     * The object name of the mbean.
+     */
+    public static String MBEAN_OBJECT_NAME = "com.digg.cassandra.locator:type=EndPointSnitch";
     
     /**
      * Reload the rack configuration
