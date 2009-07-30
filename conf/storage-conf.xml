@@ -135,6 +135,13 @@
     <DataFileDirectories>
         <DataFileDirectory>/var/cassandra/data</DataFileDirectory>
     </DataFileDirectories>
+<!--
+    <CommitLogDirectory>/mnt1/cassandra/commitlog</CommitLogDirectory>
+    <DataFileDirectories>
+        <DataFileDirectory>/mnt1/cassandra/data</DataFileDirectory>
+        <DataFileDirectory>/mnt2/cassandra/data</DataFileDirectory>
+    </DataFileDirectories>
+-->
     <CalloutLocation>/var/cassandra/callouts</CalloutLocation>
     <BootstrapFileDirectory>/var/cassandra/bootstrap</BootstrapFileDirectory>
     <StagingFileDirectory>/var/cassandra/staging</StagingFileDirectory>
@@ -145,10 +152,11 @@
          You must change this if you are running multiple nodes!
     -->
     <Seeds>
-  <!--      <Seed>10.2.128.90</Seed>
-        <Seed>10.2.128.88</Seed>
+<!--
+       <Seed>10.2.128.90</Seed>
+       <Seed>10.2.128.88</Seed>
        <Seed>10.2.128.100</Seed>
-  -->
+-->
     </Seeds>
 
 
@@ -171,7 +179,10 @@
          configured (hostname, name resolution, etc), and the Right
          Thing is to use the address associated with the hostname (it
          might not be). -->
+    <ListenAddress></ListenAddress>
+<!--
     <ListenAddress>10.2.128.93</ListenAddress>
+<!--
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
