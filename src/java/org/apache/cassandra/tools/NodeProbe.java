@@ -50,6 +50,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+import com.digg.cassandra.DiggEndPointSnitchMBean;
+
 /**
  * JMX client operations for Cassandra.
  */
@@ -452,6 +454,42 @@ public class NodeProbe
     }
 
     /**
+     * Get the rack info
+     * 
+     * @param outs the stream to write to
+     */
+    public void printRackInfo(PrintStream outs)
+    {
+        try {
+            DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
+                mbeanServerConn, new ObjectName("com.digg.cassandra.service:type=EndPointSnitch"), DiggEndPointSnitchMBean.class);
+            outs.println(snitchProxy.displayConfiguration());
+        }
+        catch (MalformedObjectNameException e)
+        {
+            throw new RuntimeException(
+                    "Invalid ObjectName? Please report this as a bug.", e);
+        }
+    }
+
+    /**
+     * Reload the rack property file
+     */
+    public void reloadRack() throws IOException
+    {
+        try {
+            DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
+                mbeanServerConn, new ObjectName("com.digg.cassandra.service:type=EndPointSnitch"), DiggEndPointSnitchMBean.class);
+            snitchProxy.reloadConfiguration();
+        }
+        catch (MalformedObjectNameException e)
+        {
+            throw new RuntimeException(
+                    "Invalid ObjectName? Please report this as a bug.", e);
+        }
+    }
+    
+    /**
      * Retrieve any non-option arguments passed on the command line.
      * 
      * @return non-option command args
@@ -480,7 +518,7 @@ public class NodeProbe
     {
         HelpFormatter hf = new HelpFormatter();
         String header = String.format(
-                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, flush_binary");
+                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, flush_binary, rackinfo, reloadrack");
         String usage = String.format("java %s -host <arg> <command>%n", NodeProbe.class.getName());
         hf.printHelp(usage, "", options, header);
     }
@@ -564,6 +602,14 @@ public class NodeProbe
                 System.exit(1);
             }
             probe.forceTableFlushBinary(probe.getArgs()[1]);
+        }
+        else if (cmdName.equals("rackinfo"))
+        {
+            probe.printRackInfo(System.out);
+        }
+        else if (cmdName.equals("reloadrack"))
+        {
+            probe.reloadRack();
         }
         else
         {
