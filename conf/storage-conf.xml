@@ -182,7 +182,7 @@
     <ListenAddress></ListenAddress>
 <!--
     <ListenAddress>10.2.128.93</ListenAddress>
-<!--
+-->
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
