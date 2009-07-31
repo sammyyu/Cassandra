@@ -1,5 +1,6 @@
 debian/log4j.properties etc/cassandra
 debian/storage-conf.xml etc/cassandra
+debian/rack.properties etc/cassandra
 debian/cassandra.in.sh usr/share/cassandra
 build/apache-cassandra-incubating-0.4.0-dev.jar usr/share/cassandra
 bin/cassandra usr/sbin

@@ -2,7 +2,7 @@ Source: cassandra
 Section: misc
 Priority: extra
 Maintainer: Eric Evans <eevans@apache.org>
-Build-Depends: debhelper (>= 5), sun-java6-jdk, ant (>= 1.7)
+Build-Depends: debhelper (>= 5), sun-java6-jdk, ant (>= 1.6)
 Homepage: http://incubator.apache.org/cassandra/
 Standards-Version: 3.8.2
 
