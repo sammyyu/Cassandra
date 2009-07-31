@@ -31,6 +31,8 @@ import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.AsciiType;
 import org.apache.cassandra.db.marshal.UTF8Type;
 import org.apache.cassandra.db.marshal.BytesType;
+import org.apache.cassandra.dht.IPartitioner;
+import org.apache.cassandra.locator.IEndPointSnitch;
 import org.apache.cassandra.utils.FileUtils;
 import org.apache.cassandra.utils.XMLUtils;
 import org.w3c.dom.Node;
@@ -62,8 +64,9 @@ public class DatabaseDescriptor
     private static int currentIndex_ = 0;
     private static String logFileDirectory_;
     private static String bootstrapFileDirectory_;
-    private static boolean rackAware_ = false;
-    private static int threadsPerPool_ = 4;
+    private static int consistencyThreads_ = 4; // not configurable
+    private static int concurrentReaders_ = 8;
+    private static int concurrentWriters_ = 32;
     private static List<String> tables_ = new ArrayList<String>();
     private static Set<String> applicationColumnFamilies_ = new HashSet<String>();
 
@@ -85,7 +88,12 @@ public class DatabaseDescriptor
     */
     private static Map<String, Map<String, CFMetaData>> tableToCFMetaDataMap_;
     /* Hashing strategy Random or OPHF */
-    private static String partitionerClass_;
+    private static IPartitioner partitioner_;
+
+    private static IEndPointSnitch endPointSnitch_;
+
+    private static Class replicaPlacementStrategyClass_;
+
     /* if the size of columns or super-columns are more than this, indexing will kick in */
     private static int columnIndexSizeInKB_;
     /* Number of hours to keep a memtable in memory */
@@ -114,33 +122,64 @@ public class DatabaseDescriptor
     /* initial token in the ring */
     private static String initialToken_ = null;
 
+    private static boolean commitLogSync_;
+
+    private static int commitLogSyncDelay_;
+
     static
     {
         try
         {
             configFileName_ = System.getProperty("storage-config") + File.separator + "storage-conf.xml";
             if (logger_.isDebugEnabled())
-              logger_.debug("Loading settings from " + configFileName_);
+                logger_.debug("Loading settings from " + configFileName_);
             XMLUtils xmlUtils = new XMLUtils(configFileName_);
 
             /* Cluster Name */
             clusterName_ = xmlUtils.getNodeValue("/Storage/ClusterName");
 
-            /* Hashing strategy */
-            partitionerClass_ = xmlUtils.getNodeValue("/Storage/Partitioner");
-            try
+            String syncRaw = xmlUtils.getNodeValue("/Storage/CommitLogSync");
+            if (!"false".equals(syncRaw) && !"true".equals(syncRaw))
             {
-                Class.forName(DatabaseDescriptor.getPartitionerClass());
+                // Bool.valueOf will silently assume false for values it doesn't recognize
+                throw new ConfigurationException("Unrecognized value for CommitLogSync.  Use 'true' or 'false'.");
             }
-            catch (NullPointerException e)
+            commitLogSync_ = Boolean.valueOf(xmlUtils.getNodeValue("/Storage/CommitLogSync"));
+
+            commitLogSyncDelay_ = Integer.valueOf(xmlUtils.getNodeValue("/Storage/CommitLogSyncDelay"));
+
+            /* Hashing strategy */
+            String partitionerClassName = xmlUtils.getNodeValue("/Storage/Partitioner");
+            if (partitionerClassName == null)
             {
                 throw new ConfigurationException("Missing partitioner directive /Storage/Partitioner");
             }
+            try
+            {
+                Class cls = Class.forName(partitionerClassName);
+                partitioner_ = (IPartitioner) cls.getConstructor().newInstance();
+            }
             catch (ClassNotFoundException e)
             {
-                throw new ConfigurationException("Invalid partitioner class " + partitionerClass_);
+                throw new ConfigurationException("Invalid partitioner class " + partitionerClassName);
             }
 
+            /* end point snitch */
+            String endPointSnitchClassName = xmlUtils.getNodeValue("/Storage/EndPointSnitch");
+            if (endPointSnitchClassName == null)
+            {
+                throw new ConfigurationException("Missing endpointsnitch directive /Storage/EndPointSnitch");
+            }
+            try
+            {
+                Class cls = Class.forName(endPointSnitchClassName);
+                endPointSnitch_ = (IEndPointSnitch) cls.getConstructor().newInstance();
+            }
+            catch (ClassNotFoundException e)
+            {
+                throw new ConfigurationException("Invalid endpointsnitch class " + endPointSnitchClassName);
+            }
+            
             /* Callout location */
             calloutLocation_ = xmlUtils.getNodeValue("/Storage/CalloutLocation");
 
@@ -167,9 +206,16 @@ public class DatabaseDescriptor
                 rpcTimeoutInMillis_ = Integer.parseInt(rpcTimeoutInMillis);
 
             /* Thread per pool */
-            String threadsPerPool = xmlUtils.getNodeValue("/Storage/ThreadsPerPool");
-            if ( threadsPerPool != null )
-                threadsPerPool_ = Integer.parseInt(threadsPerPool);
+            String rawReaders = xmlUtils.getNodeValue("/Storage/ConcurrentReads");
+            if (rawReaders != null)
+            {
+                concurrentReaders_ = Integer.parseInt(rawReaders);
+            }
+            String rawWriters = xmlUtils.getNodeValue("/Storage/ConcurrentWrites");
+            if (rawWriters != null)
+            {
+                concurrentWriters_ = Integer.parseInt(rawWriters);
+            }
 
             /* TCP port on which the storage system listens */
             String port = xmlUtils.getNodeValue("/Storage/StoragePort");
@@ -265,10 +311,20 @@ public class DatabaseDescriptor
             tableToCFMetaDataMap_ = new HashMap<String, Map<String, CFMetaData>>();
             tableKeysCachedFractions_ = new HashMap<String, Double>();
 
-            /* Rack Aware option */
-            value = xmlUtils.getNodeValue("/Storage/RackAware");
-            if ( value != null )
-                rackAware_ = Boolean.parseBoolean(value);
+            /* See which replica placement strategy to use */
+            String replicaPlacementStrategyClassName = xmlUtils.getNodeValue("/Storage/ReplicaPlacementStrategy");
+            if (replicaPlacementStrategyClassName == null)
+            {
+                throw new ConfigurationException("Missing replicaplacementstrategy directive /Storage/ReplicaPlacementStrategy");
+            }
+            try
+            {
+                replicaPlacementStrategyClass_ = Class.forName(replicaPlacementStrategyClassName);
+            }
+            catch (ClassNotFoundException e)
+            {
+                throw new ConfigurationException("Invalid replicaplacementstrategy class " + replicaPlacementStrategyClassName);
+            }
 
             /* Read the table related stuff from config */
             NodeList tables = xmlUtils.getRequestedNodeList("/Storage/Tables/Table");
@@ -519,9 +575,19 @@ public class DatabaseDescriptor
         return gcGraceInSeconds_;
     }
 
-    public static String getPartitionerClass()
+    public static IPartitioner getPartitioner()
     {
-        return partitionerClass_;
+        return partitioner_;
+    }
+    
+    public static IEndPointSnitch getEndPointSnitch()
+    {
+        return endPointSnitch_;
+    }
+
+    public static Class getReplicaPlacementStrategyClass()
+    {
+        return replicaPlacementStrategyClass_;
     }
     
     public static String getCalloutLocation()
@@ -671,9 +737,19 @@ public class DatabaseDescriptor
         return rpcTimeoutInMillis_;
     }
 
-    public static int getThreadsPerPool()
+    public static int getConsistencyThreads()
     {
-        return threadsPerPool_;
+        return consistencyThreads_;
+    }
+
+    public static int getConcurrentReaders()
+    {
+        return concurrentReaders_;
+    }
+
+    public static int getConcurrentWriters()
+    {
+        return concurrentWriters_;
     }
 
     public static String[] getAllDataFileLocations()
@@ -725,11 +801,6 @@ public class DatabaseDescriptor
     public static void setLogFileLocation(String logLocation)
     {
         logFileDirectory_ = logLocation;
-    }
-
-    public static boolean isRackAware()
-    {
-        return rackAware_;
     }
 
     public static Set<String> getSeeds()
@@ -820,5 +891,15 @@ public class DatabaseDescriptor
     public static String getThriftAddress()
     {
         return thriftAddress_;
+    }
+
+    public static int getCommitLogSyncDelay()
+    {
+        return commitLogSyncDelay_;
+    }
+
+    public static boolean isCommitLogSyncEnabled()
+    {
+        return commitLogSync_;
     }
 }

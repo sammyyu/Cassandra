@@ -61,7 +61,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     /* All stage identifiers */
     public final static String mutationStage_ = "ROW-MUTATION-STAGE";
     public final static String readStage_ = "ROW-READ-STAGE";
-    public final static String mrStage_ = "MAP-REDUCE-STAGE";
     
     /* All verb handler identifiers */
     public final static String mutationVerbHandler_ = "ROW-MUTATION-VERB-HANDLER";
@@ -111,6 +110,12 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         HINT,
         FULL
     }
+
+    static
+    {
+        partitioner_ = DatabaseDescriptor.getPartitioner();
+    }
+
 
     public static class BootstrapInitiateDoneVerbHandler implements IVerbHandler
     {
@@ -204,8 +209,8 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     {
         init();
         storageLoadBalancer_ = new StorageLoadBalancer(this);
-        endPointSnitch_ = new EndPointSnitch();
-        
+        endPointSnitch_ = DatabaseDescriptor.getEndPointSnitch();
+
         /* register the verb handlers */
         MessagingService.getMessagingInstance().registerVerbHandlers(StorageService.tokenVerbHandler_, new TokenUpdateVerbHandler());
         MessagingService.getMessagingInstance().registerVerbHandlers(StorageService.binaryVerbHandler_, new BinaryVerbHandler());
@@ -223,36 +228,28 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         MessagingService.getMessagingInstance().registerVerbHandlers(StorageService.rangeVerbHandler_, new RangeVerbHandler());
         
         /* register the stage for the mutations */
-        int threadCount = DatabaseDescriptor.getThreadsPerPool();
-        consistencyManager_ = new DebuggableThreadPoolExecutor(threadCount,
-        		threadCount,
-                Integer.MAX_VALUE, TimeUnit.SECONDS,
-                new LinkedBlockingQueue<Runnable>(), new ThreadFactoryImpl(
-                        "CONSISTENCY-MANAGER"));
+        consistencyManager_ = new DebuggableThreadPoolExecutor(DatabaseDescriptor.getConsistencyThreads(),
+                                                               DatabaseDescriptor.getConsistencyThreads(),
+                                                               Integer.MAX_VALUE, TimeUnit.SECONDS,
+                                                               new LinkedBlockingQueue<Runnable>(), new ThreadFactoryImpl("CONSISTENCY-MANAGER"));
         
-        StageManager.registerStage(StorageService.mutationStage_, new MultiThreadedStage(StorageService.mutationStage_, threadCount));
-        StageManager.registerStage(StorageService.readStage_, new MultiThreadedStage(StorageService.readStage_, 2*threadCount));        
-        StageManager.registerStage(StorageService.mrStage_, new MultiThreadedStage(StorageService.mrStage_, threadCount));
+        StageManager.registerStage(StorageService.mutationStage_,
+                                   new MultiThreadedStage(StorageService.mutationStage_, DatabaseDescriptor.getConcurrentWriters()));
+        StageManager.registerStage(StorageService.readStage_,
+                                   new MultiThreadedStage(StorageService.readStage_, DatabaseDescriptor.getConcurrentReaders()));
 
-        if ( DatabaseDescriptor.isRackAware() )
-            nodePicker_ = new RackAwareStrategy(tokenMetadata_, partitioner_, DatabaseDescriptor.getReplicationFactor(), DatabaseDescriptor.getStoragePort());
-        else
-            nodePicker_ = new RackUnawareStrategy(tokenMetadata_, partitioner_, DatabaseDescriptor.getReplicationFactor(), DatabaseDescriptor.getStoragePort());
-    }
-
-    static
-    {
+        Class cls = DatabaseDescriptor.getReplicaPlacementStrategyClass();
+        Class [] parameterTypes = new Class[] { TokenMetadata.class, IPartitioner.class, int.class, int.class};
         try
         {
-            Class cls = Class.forName(DatabaseDescriptor.getPartitionerClass());
-            partitioner_ = (IPartitioner) cls.getConstructor().newInstance();
+            nodePicker_ = (IReplicaPlacementStrategy) cls.getConstructor(parameterTypes).newInstance(tokenMetadata_, partitioner_, DatabaseDescriptor.getReplicationFactor(), DatabaseDescriptor.getStoragePort());
         }
         catch (Exception e)
         {
             throw new RuntimeException(e);
         }
     }
-    
+
     public void start() throws IOException
     {
         storageMetadata_ = SystemTable.initMetadata();
@@ -707,16 +704,16 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
                 String tableName = tableDir.getName();
 
                 for (File file : tableDir.listFiles())
-        {
+                {
                     streamContexts.add(new StreamContextManager.StreamContext(file.getAbsolutePath(), file.length(), tableName));
-            if (logger_.isDebugEnabled())
+                    if (logger_.isDebugEnabled())
                       logger_.debug("Stream context metadata " + streamContexts);
                 }
             }
         }
         
         if ( streamContexts.size() > 0 )
-    {
+        {
             EndPoint target = new EndPoint(host, DatabaseDescriptor.getStoragePort());
             /* Set up the stream manager with the files that need to streamed */
             StreamManager.instance(target).addFilesToStream((StreamContextManager.StreamContext[]) streamContexts.toArray());
@@ -730,14 +727,14 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
               logger_.debug("Waiting for transfer to " + target + " to complete");
             StreamManager.instance(target).waitForStreamCompletion();
             if (logger_.isDebugEnabled())
-            logger_.debug("Done with transfer to " + target);  
+              logger_.debug("Done with transfer to " + target);  
         }
     }
 
     /**
      * Takes the snapshot for a given table.
      * 
-     * @param table the name of the table.
+     * @param tableName the name of the table.
      * @param tag   the tag given to the snapshot (null is permissible)
      */
     public void takeSnapshot(String tableName, String tag) throws IOException
