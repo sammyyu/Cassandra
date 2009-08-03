@@ -45,8 +45,8 @@ class MinorCompactionManager
     private static MinorCompactionManager instance_;
     private static Lock lock_ = new ReentrantLock();
     private static Logger logger_ = Logger.getLogger(MinorCompactionManager.class);
-    private static final long intervalInMins_ = 5;
-    static final int COMPACTION_THRESHOLD = 4; // compact this many sstables at a time
+    private static final long intervalInMins_ = 1440;
+    static final int COMPACTION_THRESHOLD = 0; // compact this many sstables at a time
 
     public static MinorCompactionManager instance()
     {
