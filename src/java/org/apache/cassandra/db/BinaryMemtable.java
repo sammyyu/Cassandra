@@ -44,7 +44,7 @@ import org.apache.cassandra.dht.IPartitioner;
 public class BinaryMemtable
 {
     private static Logger logger_ = Logger.getLogger( Memtable.class );
-    private int threshold_ = 512*1024*1024;
+    private int threshold_ = 256*1024*1024;
     private AtomicInteger currentSize_ = new AtomicInteger(0);
 
     /* Table and ColumnFamily name are used to determine the ColumnFamilyStore */
@@ -146,7 +146,22 @@ public class BinaryMemtable
         */
         ColumnFamilyStore cfStore = Table.open(table_).getColumnFamilyStore(cfName_);
         List<String> keys = new ArrayList<String>( columnFamilies_.keySet() );
-        SSTableWriter writer = new SSTableWriter(cfStore.getTempSSTablePath(), keys.size(), StorageService.getPartitioner());
+        String path;
+        SSTableWriter writer;
+        /*
+            Adding a lock here so data directories are evenly used. By default currentIndex
+            is incremented, not an AtomicInteger.
+         */
+        lock_.lock();
+        try {
+            path = cfStore.getTempSSTablePath();
+            writer = new SSTableWriter(path, keys.size(), StorageService.getPartitioner());
+        }
+        finally {
+            lock_.unlock();
+        }
+        
+        writer = new SSTableWriter(path, keys.size(), StorageService.getPartitioner());
         final IPartitioner partitioner = StorageService.getPartitioner();
         final Comparator<String> dc = partitioner.getDecoratedKeyComparator();
         Collections.sort(keys, new Comparator<String>()
