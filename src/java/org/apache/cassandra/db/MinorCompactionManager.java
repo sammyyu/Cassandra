@@ -40,13 +40,13 @@ import org.apache.log4j.Logger;
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
  */
 
-class MinorCompactionManager
+public class MinorCompactionManager
 {
     private static MinorCompactionManager instance_;
     private static Lock lock_ = new ReentrantLock();
     private static Logger logger_ = Logger.getLogger(MinorCompactionManager.class);
     private static final long intervalInMins_ = 5;
-    static final int COMPACTION_THRESHOLD = 4; // compact this many sstables at a time
+    static int COMPACTION_THRESHOLD = 4; // compact this many sstables at a time
 
     public static MinorCompactionManager instance()
     {
@@ -188,4 +188,13 @@ class MinorCompactionManager
     {
         compactor_.submit( new OnDemandCompactor(columnFamilyStore, skip) );
     }
+
+    public static int getCompactionThreshold() {
+        return COMPACTION_THRESHOLD;
+    }
+
+    public static void setCompactionThreshold(int threshold) {
+        COMPACTION_THRESHOLD = threshold;
+    }
+
 }

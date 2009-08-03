@@ -500,6 +500,26 @@ public class NodeProbe
     }
     
     /**
+     * Get the compaction threshold
+     * 
+     * @param outs the stream to write to
+     */
+    public void getCompactionThreshold(PrintStream outs)
+    {
+        outs.println("Current compaction threshold: " + ssProxy.getCompactionThreshold());
+    }
+
+    /**
+     * Set the compaction threshold
+     * 
+     * @param compactionThreshold compaction threshold
+     */
+    public void setCompactionThreshold(int compactionThreshold)
+    {
+        ssProxy.setCompactionThreshold(compactionThreshold);
+    }
+
+    /**
      * Retrieve any non-option arguments passed on the command line.
      * 
      * @return non-option command args
@@ -528,7 +548,8 @@ public class NodeProbe
     {
         HelpFormatter hf = new HelpFormatter();
         String header = String.format(
-                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, bootstrap, flush_binary, rackinfo, reloadrack");
+                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, bootstrap, flush_binary, rackinfo, reloadrack," +
+                " getcompactionthreshold, setcompactionthreshold threshold");
         String usage = String.format("java %s -host <arg> <command>%n", NodeProbe.class.getName());
         hf.printHelp(usage, "", options, header);
     }
@@ -633,6 +654,21 @@ public class NodeProbe
         else if (cmdName.equals("reloadrack"))
         {
             probe.reloadRack();
+        }
+        else if (cmdName.equals("getcompactionthreshold"))
+        {
+            probe.getCompactionThreshold(System.out);
+        }
+        else if (cmdName.equals("setcompactionthreshold"))
+        {
+            if (probe.getArgs().length < 2)
+            {
+                System.err.println("Missing threshold value");
+                NodeProbe.printUsage();
+                System.exit(1);
+            }
+            int threshold = Integer.parseInt(probe.getArgs()[1]);
+            probe.setCompactionThreshold(threshold);
         }
         else
         {
