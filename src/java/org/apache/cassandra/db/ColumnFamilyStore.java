@@ -1526,7 +1526,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                 }
                 catch (Throwable th)
                 {
-                    logger_.error(th);
+                    logger_.error("error closing " + ci, th);
                 }
             }
 

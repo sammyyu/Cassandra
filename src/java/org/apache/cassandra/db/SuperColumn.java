@@ -129,7 +129,7 @@ public final class SuperColumn implements IColumn
     	 * We need to keep the way we are calculating the column size in sync with the
     	 * way we are calculating the size for the column family serializer.
     	 */
-    	return IColumn.UtfPrefix_ + name_.length + DBConstants.boolSize_ + DBConstants.intSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
+        return IColumn.UtfPrefix_ + name_.length + DBConstants.intSize_ + DBConstants.longSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
     }
 
     /**
@@ -138,8 +138,7 @@ public final class SuperColumn implements IColumn
     int getSizeOfAllColumns()
     {
         int size = 0;
-        Collection<IColumn> subColumns = getSubColumns();
-        for ( IColumn subColumn : subColumns )
+        for (IColumn subColumn : getSubColumns())
         {
             size += subColumn.serializedSize();
         }
@@ -348,10 +347,8 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
         dos.writeLong(superColumn.getMarkedForDeleteAt());
 
         Collection<IColumn> columns  = column.getSubColumns();
-        int size = columns.size();
-        dos.writeInt(size);
+        dos.writeInt(columns.size());
 
-        dos.writeInt(superColumn.getSizeOfAllColumns());
         for ( IColumn subColumn : columns )
         {
             Column.serializer().serialize(subColumn, dos);
@@ -367,8 +364,6 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
 
         /* read the number of columns */
         int size = dis.readInt();
-        /* read the size of all columns */
-        dis.readInt();
         for ( int i = 0; i < size; ++i )
         {
             IColumn subColumn = Column.serializer().deserialize(dis);
