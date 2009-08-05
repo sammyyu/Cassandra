@@ -503,6 +503,18 @@ public class MessagingService implements IMessagingService
         isStreaming_.set(bVal);
     }
     
+    public static void flushAndshutdown()
+    {
+        // safely shutdown and send all writes
+        for(Map.Entry<String, TcpConnectionManager> entry : poolTable_.entrySet() )
+        {
+            for(TcpConnection connection: entry.getValue().getConnections())
+            {
+                connection.doPendingWrites();
+            }
+        }
+        shutdown();
+    }
     public static void shutdown()
     {
         logger_.info("Shutting down ...");
