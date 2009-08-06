@@ -764,12 +764,14 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         return MinorCompactionManager.getCompactionThreshold();
     }
 
+
     /**
      * Sets the number of sstables in queue before compaction kicks off
      */
     public void setCompactionThreshold(int threshold) {
         MinorCompactionManager.setCompactionThreshold(threshold);
     }
+
 
     /* End of MBean interface methods */
     
