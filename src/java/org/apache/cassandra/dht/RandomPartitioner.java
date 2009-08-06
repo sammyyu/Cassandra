@@ -20,6 +20,7 @@ package org.apache.cassandra.dht;
 
 import java.math.BigInteger;
 import java.util.Comparator;
+import java.util.StringTokenizer;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.utils.FBUtilities;
@@ -34,8 +35,16 @@ public class RandomPartitioner implements IPartitioner
     {
         public int compare(String o1, String o2)
         {
-            String[] split1 = o1.split(":", 2);
-            String[] split2 = o2.split(":", 2);
+            StringTokenizer st;
+            String [] split1 = new String[2];
+            st = new StringTokenizer(o1, ":");
+            split1[0] = st.nextToken();
+            split1[1] = st.nextToken();
+            String [] split2 = new String[2];
+            st = new StringTokenizer(o2, ":");
+            split2[0] = st.nextToken();
+            split2[1] = st.nextToken();
+
             BigInteger i1 = new BigInteger(split1[0]);
             BigInteger i2 = new BigInteger(split2[0]);
             int v = i1.compareTo(i2);
