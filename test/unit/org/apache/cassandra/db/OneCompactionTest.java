@@ -34,23 +34,23 @@ public class OneCompactionTest
 {
     private void testCompaction(String columnFamilyName, int insertsPerTable) throws IOException, ExecutionException, InterruptedException
     {
-        Table table = Table.open("Table1");
+        Table table = Table.open("Keyspace1");
         ColumnFamilyStore store = table.getColumnFamilyStore(columnFamilyName);
 
         Set<String> inserted = new HashSet<String>();
         for (int j = 0; j < insertsPerTable; j++) {
-            String key = "0";
-            RowMutation rm = new RowMutation("Table1", key);
+            String key = String.valueOf(j);
+            RowMutation rm = new RowMutation("Keyspace1", key);
             rm.add(new QueryPath(columnFamilyName, null, "0".getBytes()), new byte[0], j);
             rm.apply();
             inserted.add(key);
             store.forceBlockingFlush();
-            assertEquals(table.getKeyRange(columnFamilyName, "", "", 10000).size(), inserted.size());
+            assertEquals(inserted.size(), table.getKeyRange(columnFamilyName, "", "", 10000).keys.size());
         }
         Future<Integer> ft = MinorCompactionManager.instance().submit(store, 2);
         ft.get();
         assertEquals(1, store.getSSTables().size());
-        assertEquals(table.getKeyRange(columnFamilyName, "", "", 10000).size(), inserted.size());
+        assertEquals(table.getKeyRange(columnFamilyName, "", "", 10000).keys.size(), inserted.size());
     }
 
     @Test
@@ -62,6 +62,6 @@ public class OneCompactionTest
     @Test
     public void testCompaction2() throws IOException, ExecutionException, InterruptedException
     {
-        testCompaction("Standard2", 5);
+        testCompaction("Standard2", 2);
     }
 }

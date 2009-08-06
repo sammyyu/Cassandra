@@ -19,6 +19,7 @@
 package org.apache.cassandra.dht;
 
  import java.util.ArrayList;
+ import java.util.Arrays;
  import java.util.Collections;
  import java.util.HashMap;
  import java.util.HashSet;
@@ -31,7 +32,7 @@ package org.apache.cassandra.dht;
  import org.apache.cassandra.locator.TokenMetadata;
  import org.apache.cassandra.net.EndPoint;
  import org.apache.cassandra.service.StorageService;
- import org.apache.cassandra.utils.LogUtil;
+import org.apache.cassandra.utils.LogUtil;
 
 
 /**
@@ -46,7 +47,6 @@ public class BootStrapper implements Runnable
     /* tokens of the nodes being bootstrapped. */
     protected final Token[] tokens_;
     protected TokenMetadata tokenMetadata_ = null;
-    private List<EndPoint> filters_ = new ArrayList<EndPoint>();
 
     public BootStrapper(EndPoint[] target, Token... token)
     {
@@ -54,19 +54,13 @@ public class BootStrapper implements Runnable
         tokens_ = token;
         tokenMetadata_ = StorageService.instance().getTokenMetadata();
     }
-    
-    public BootStrapper(EndPoint[] target, Token[] token, EndPoint[] filters)
-    {
-        this(target, token);
-        Collections.addAll(filters_, filters);
-    }
 
     public void run()
     {
         try
         {
             if (logger_.isDebugEnabled())
-              logger_.debug("Beginning bootstrap process for " + targets_ + " ...");                                                               
+              logger_.debug("Beginning bootstrap process for " + Arrays.toString(targets_) + " ...");                                                               
             /* copy the token to endpoint map */
             Map<Token, EndPoint> tokenToEndPointMap = tokenMetadata_.cloneTokenEndPointMap();
             /* remove the tokens associated with the endpoints being bootstrapped */                
@@ -122,7 +116,7 @@ public class BootStrapper implements Runnable
             /* Calculate ranges that need to be sent and from whom to where */
             Map<Range, List<BootstrapSourceTarget>> rangesWithSourceTarget = LeaveJoinProtocolHelper.getRangeSourceTargetInfo(oldRangeToEndPointMap, newRangeToEndPointMap);
             /* Send messages to respective folks to stream data over to the new nodes being bootstrapped */
-            LeaveJoinProtocolHelper.assignWork(rangesWithSourceTarget, filters_);                
+            LeaveJoinProtocolHelper.assignWork(rangesWithSourceTarget);                
         }
         catch ( Throwable th )
         {

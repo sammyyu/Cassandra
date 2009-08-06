@@ -39,7 +39,7 @@ import org.apache.cassandra.net.EndPoint;
 */
 public abstract class AbstractStrategy implements IReplicaPlacementStrategy
 {
-    protected static Logger logger_ = Logger.getLogger(AbstractStrategy.class);
+    protected static final Logger logger_ = Logger.getLogger(AbstractStrategy.class);
 
     protected TokenMetadata tokenMetadata_;
     protected IPartitioner partitioner_;
@@ -104,7 +104,7 @@ public abstract class AbstractStrategy implements IReplicaPlacementStrategy
     {
         List<EndPoint> liveList = new ArrayList<EndPoint>();
         Map<EndPoint, EndPoint> map = new HashMap<EndPoint, EndPoint>();
-        EndPoint[] topN = getStorageEndPoints( token );
+        EndPoint[] topN = getStorageEndPoints( token, 0);
 
         for( int i = 0 ; i < topN.length ; i++)
         {
@@ -131,5 +131,5 @@ public abstract class AbstractStrategy implements IReplicaPlacementStrategy
         return map;
     }
 
-    public abstract EndPoint[] getStorageEndPoints(Token token);
+    public abstract EndPoint[] getStorageEndPoints(Token token, int offset);
 }

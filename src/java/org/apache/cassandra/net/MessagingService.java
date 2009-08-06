@@ -456,7 +456,6 @@ public class MessagingService implements IMessagingService
     
     public void sendUdpOneWay(Message message, EndPoint to)
     {
-        EndPoint from = message.getFrom();              
         if (message.getFrom().equals(to)) {
             MessagingService.receive(message);
             return;
@@ -601,7 +600,7 @@ public class MessagingService implements IMessagingService
         return messageSerializerExecutor_;
     }
     
-    public static ExecutorService getDeserilizationExecutor()
+    public static ExecutorService getDeserializationExecutor()
     {
         return messageDeserializerExecutor_;
     }

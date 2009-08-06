@@ -16,9 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.concurrent;
+package org.apache.cassandra.io;
 
-interface RejectedExecutionHandler
+import java.io.*;
+
+public interface ICompactSerializer2<T>
 {
-    public void rejectedExecution(Runnable r, ContinuationsExecutor executor); 
+	/**
+     * Serialize the specified type into the specified DataOutput instance.
+     * @param t type that needs to be serialized
+     * @param dos DataOutput into which serialization needs to happen.
+     * @throws IOException
+     */
+    public void serialize(T t, DataOutput dos) throws IOException;
+
+    /**
+     * Deserialize from the specified DataInput instance.
+     * @param dis DataInput from which deserialization needs to happen.
+     * @throws IOException
+     * @return the type that was deserialized
+     */
+    public T deserialize(DataInput dis) throws IOException;    
 }

@@ -18,10 +18,7 @@
 
 package org.apache.cassandra.db;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.util.Collection;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +29,7 @@ import org.apache.log4j.Logger;
 
 import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.io.ICompactSerializer;
+import org.apache.cassandra.io.ICompactSerializer2;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.db.marshal.MarshalException;
 
@@ -112,24 +110,11 @@ public final class SuperColumn implements IColumn
     */
     public int serializedSize()
     {
-        /*
-         * Size of a super-column is =
-         *   size of a name (UtfPrefix + length of the string)
-         * + 1 byte to indicate if the super-column has been deleted
-         * + 4 bytes for size of the sub-columns
-         * + 4 bytes for the number of sub-columns
-         * + size of all the sub-columns.
-        */
-
-    	/*
-    	 * We store the string as UTF-8 encoded, so when we calculate the length, it
-    	 * should be converted to UTF-8.
-    	 */
     	/*
     	 * We need to keep the way we are calculating the column size in sync with the
     	 * way we are calculating the size for the column family serializer.
     	 */
-    	return IColumn.UtfPrefix_ + name_.length + DBConstants.boolSize_ + DBConstants.intSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
+    	return IColumn.UtfPrefix_ + name_.length + DBConstants.intSize_ + DBConstants.longSize_ + DBConstants.intSize_ + getSizeOfAllColumns();
     }
 
     /**
@@ -138,8 +123,7 @@ public final class SuperColumn implements IColumn
     int getSizeOfAllColumns()
     {
         int size = 0;
-        Collection<IColumn> subColumns = getSubColumns();
-        for ( IColumn subColumn : subColumns )
+        for (IColumn subColumn : getSubColumns())
         {
             size += subColumn.serializedSize();
         }
@@ -326,7 +310,7 @@ public final class SuperColumn implements IColumn
     }
 }
 
-class SuperColumnSerializer implements ICompactSerializer<IColumn>
+class SuperColumnSerializer implements ICompactSerializer2<IColumn>
 {
     private AbstractType comparator;
 
@@ -340,7 +324,7 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
         return comparator;
     }
 
-    public void serialize(IColumn column, DataOutputStream dos) throws IOException
+    public void serialize(IColumn column, DataOutput dos) throws IOException
     {
     	SuperColumn superColumn = (SuperColumn)column;
         ColumnSerializer.writeName(column.name(), dos);
@@ -348,27 +332,22 @@ class SuperColumnSerializer implements ICompactSerializer<IColumn>
         dos.writeLong(superColumn.getMarkedForDeleteAt());
 
         Collection<IColumn> columns  = column.getSubColumns();
-        int size = columns.size();
-        dos.writeInt(size);
+        dos.writeInt(columns.size());
 
-        dos.writeInt(superColumn.getSizeOfAllColumns());
         for ( IColumn subColumn : columns )
         {
             Column.serializer().serialize(subColumn, dos);
         }
     }
 
-    public IColumn deserialize(DataInputStream dis) throws IOException
+    public IColumn deserialize(DataInput dis) throws IOException
     {
         byte[] name = ColumnSerializer.readName(dis);
         SuperColumn superColumn = new SuperColumn(name, comparator);
         superColumn.markForDeleteAt(dis.readInt(), dis.readLong());
-        assert dis.available() > 0;
 
         /* read the number of columns */
         int size = dis.readInt();
-        /* read the size of all columns */
-        dis.readInt();
         for ( int i = 0; i < size; ++i )
         {
             IColumn subColumn = Column.serializer().deserialize(dis);

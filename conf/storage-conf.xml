@@ -25,19 +25,20 @@
          one logical cluster from joining any other cluster. -->
     <ClusterName>Test Cluster</ClusterName>
 
-    <!-- Tables and ColumnFamilies                                            
-         Think of a table as a namespace, not a relational table.
-         (ColumnFamilies are closer in meaning to those.)
+    <!-- Keyspaces and ColumnFamilies                                            
+         A ColumnFamily is the Cassandra concept closest to a relational table.
+         Keyspaces are separate groups of ColumnFamilies.  Except in very
+         unusual circumstances you will have one Keyspace per application.
 
-         There is an implicit table named 'system' for Cassandra internals.
+         There is an implicit keyspace named 'system' for Cassandra internals.
 
          The default ColumnSort is Time for standard column families.
          For super column families, specifying ColumnSort is not supported;
          the supercolumns themselves are always name-sorted and their subcolumns
          are always time-sorted.
     -->
-    <Tables>
-        <Table Name="Table1">
+    <Keyspaces>
+        <Keyspace Name="Keyspace1">
             <!-- The fraction of keys per sstable whose locations we
                  keep in memory in "mostly LRU" order.  (JUST the key
                  locations, NOT any column values.)
@@ -53,13 +54,20 @@
                  The CompareWith attribute tells Cassandra how to sort the columns
                  for slicing operations.  For backwards compatibility, the default 
                  is to use AsciiType, which is probably NOT what you want.
-                 Other options are BytesType, UTF8Type, UUIDType, and LongType.
+                 Other options are BytesType, UTF8Type, LexicalUUIDType, TimeUUIDType, and LongType.
                  You can also specify the fully-qualified class name to a class
                  of your choice implementing org.apache.cassandra.db.marshal.IType.
 
                  SuperColumns have a similar CompareSubcolumnsWith attribute.
 
-                 (So to get the closest approximation to 0.3-style supercolumns,
+                 ByteType: simple sort by byte value.  No validation is performed.
+                 AsciiType: like BytesType, but validates that the input can be parsed as US-ASCII.
+                 UTF8Type: A string encoded as UTF8
+                 LongType: A 64bit long
+                 LexicalUUIDType: a 128bit UUID, compared lexically (by byte value)
+                 TimeUUIDType: a 128bit version 1 UUID, compared by timestamp
+
+                 (To get the closest approximation to 0.3-style supercolumns,
                  you would use CompareWith=UTF8Type CompareSubcolumnsWith=LongType.)
 
                  if FlushPeriodInMinutes is configured and positive, it will be
@@ -70,10 +78,10 @@
             -->
             <ColumnFamily CompareWith="UTF8Type" Name="Standard1" FlushPeriodInMinutes="60"/>
             <ColumnFamily CompareWith="UTF8Type" Name="Standard2"/>
-            <ColumnFamily CompareWith="UUIDType" Name="StandardByUUID1"/>
+            <ColumnFamily CompareWith="TimeUUIDType" Name="StandardByUUID1"/>
             <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="Super1"/>
-        </Table>
-    </Tables>
+        </Keyspace>
+    </Keyspaces>
 
     <!-- Partitioner: any IPartitioner may be used, including your own
          as long as it is on the classpath.  Out of the box,

@@ -25,7 +25,6 @@ import java.util.*;
 import org.junit.Test;
 
 import org.apache.cassandra.CleanupHelper;
-import org.apache.cassandra.io.FileStruct;
 import org.apache.cassandra.dht.OrderPreservingPartitioner;
 
 public class SSTableTest extends CleanupHelper
@@ -57,11 +56,12 @@ public class SSTableTest extends CleanupHelper
 
     private void verifySingle(SSTableReader sstable, byte[] bytes, String key) throws IOException
     {
-        FileStruct fs = sstable.getFileStruct();
-        fs.seekTo(key);
-        int size = fs.getBufIn().readInt();
+        BufferedRandomAccessFile file = new BufferedRandomAccessFile(sstable.path, "r");
+        file.seek(sstable.getPosition(key));
+        assert key.equals(file.readUTF());
+        int size = file.readInt();
         byte[] bytes2 = new byte[size];
-        fs.getBufIn().readFully(bytes2);
+        file.readFully(bytes2);
         assert Arrays.equals(bytes2, bytes);
     }
 
@@ -93,13 +93,14 @@ public class SSTableTest extends CleanupHelper
     {
         List<String> keys = new ArrayList<String>(map.keySet());
         Collections.shuffle(keys);
-        FileStruct fs = sstable.getFileStruct();
+        BufferedRandomAccessFile file = new BufferedRandomAccessFile(sstable.path, "r");
         for (String key : keys)
         {
-            fs.seekTo(key);
-            int size = fs.getBufIn().readInt();
+            file.seek(sstable.getPosition(key));
+            assert key.equals(file.readUTF());
+            int size = file.readInt();
             byte[] bytes2 = new byte[size];
-            fs.getBufIn().readFully(bytes2);
+            file.readFully(bytes2);
             assert Arrays.equals(bytes2, map.get(key));
         }
     }

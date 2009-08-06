@@ -23,9 +23,7 @@ import java.util.*;
 
 import org.apache.log4j.Logger;
 
-import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.dht.IPartitioner;
-import org.apache.cassandra.io.SequenceFile.ColumnGroupReader;
 import org.apache.cassandra.utils.BloomFilter;
 import org.apache.cassandra.utils.FileUtils;
 import org.apache.cassandra.service.StorageService;
@@ -198,7 +196,7 @@ public class SSTableReader extends SSTable
     /**
      * returns the position in the data file to find the given key, or -1 if the key is not present
      */
-    public long getPosition(String decoratedKey, IPartitioner partitioner) throws IOException
+    public long getPosition(String decoratedKey) throws IOException
     {
         if (!bf.isPresent(decoratedKey))
             return -1;
@@ -217,7 +215,7 @@ public class SSTableReader extends SSTable
         }
 
         // TODO mmap the index file?
-        BufferedRandomAccessFile input = new BufferedRandomAccessFile(indexFilename(dataFile), "r");
+        BufferedRandomAccessFile input = new BufferedRandomAccessFile(indexFilename(path), "r");
         input.seek(start);
         int i = 0;
         try
@@ -260,7 +258,7 @@ public class SSTableReader extends SSTable
         {
             return 0;
         }
-        BufferedRandomAccessFile input = new BufferedRandomAccessFile(indexFilename(dataFile), "r");
+        BufferedRandomAccessFile input = new BufferedRandomAccessFile(indexFilename(path), "r");
         input.seek(start);
         try
         {
@@ -287,66 +285,12 @@ public class SSTableReader extends SSTable
         }
     }
 
-    public DataInputBuffer next(final String clientKey, String cfName, SortedSet<byte[]> columnNames) throws IOException
-    {
-        IFileReader dataReader = null;
-        try
-        {
-            dataReader = SequenceFile.reader(dataFile);
-            String decoratedKey = partitioner.decorateKey(clientKey);
-            long position = getPosition(decoratedKey, partitioner);
-
-            DataOutputBuffer bufOut = new DataOutputBuffer();
-            DataInputBuffer bufIn = new DataInputBuffer();
-            long bytesRead = dataReader.next(decoratedKey, bufOut, cfName, columnNames, position);
-            if (bytesRead != -1L)
-            {
-                if (bufOut.getLength() > 0)
-                {
-                    bufIn.reset(bufOut.getData(), bufOut.getLength());
-                    /* read the key even though we do not use it */
-                    bufIn.readUTF();
-                    bufIn.readInt();
-                }
-            }
-            return bufIn;
-        }
-        finally
-        {
-            if (dataReader != null)
-            {
-                dataReader.close();
-            }
-        }
-    }
-
-    /**
-     * obtain a BlockReader for the getColumnSlice call.
-     */
-    public ColumnGroupReader getColumnGroupReader(String key, String cfName, byte[] startColumn, boolean isAscending) throws IOException
-    {
-        IFileReader dataReader = SequenceFile.reader(dataFile);
-
-        try
-        {
-            /* Morph key into actual key based on the partition type. */
-            String decoratedKey = partitioner.decorateKey(key);
-            long position = getPosition(decoratedKey, partitioner);
-            AbstractType comparator = DatabaseDescriptor.getComparator(getTableName(), cfName);
-            return new ColumnGroupReader(dataFile, decoratedKey, cfName, comparator, startColumn, isAscending, position);
-        }
-        finally
-        {
-            dataReader.close();
-        }
-    }
-
     public void delete() throws IOException
     {
-        FileUtils.deleteWithConfirm(new File(dataFile));
-        FileUtils.deleteWithConfirm(new File(indexFilename(dataFile)));
-        FileUtils.deleteWithConfirm(new File(filterFilename(dataFile)));
-        openedFiles.remove(dataFile);
+        FileUtils.deleteWithConfirm(new File(path));
+        FileUtils.deleteWithConfirm(new File(indexFilename(path)));
+        FileUtils.deleteWithConfirm(new File(filterFilename(path)));
+        openedFiles.remove(path);
     }
 
     /** obviously only for testing */
@@ -361,11 +305,11 @@ public class SSTableReader extends SSTable
         openedFiles.clear();
         for (SSTableReader sstable : sstables)
         {
-            SSTableReader.open(sstable.dataFile, sstable.partitioner, 0.01);
+            SSTableReader.open(sstable.path, sstable.partitioner, 0.01);
         }
     }
 
-    IPartitioner getPartitioner()
+    public IPartitioner getPartitioner()
     {
         return partitioner;
     }
@@ -377,7 +321,7 @@ public class SSTableReader extends SSTable
 
     public String getTableName()
     {
-        return parseTableName(dataFile);
+        return parseTableName(path);
     }
 
     public static void deleteAll() throws IOException

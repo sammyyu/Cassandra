@@ -21,6 +21,9 @@ package org.apache.cassandra.service;
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -76,7 +79,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     public final static String mbrshipCleanerVerbHandler_ = "MBRSHIP-CLEANER-VERB-HANDLER";
     public final static String bsMetadataVerbHandler_ = "BS-METADATA-VERB-HANDLER";
     public final static String calloutDeployVerbHandler_ = "CALLOUT-DEPLOY-VERB-HANDLER";
-    public static String rangeVerbHandler_ = "RANGE-VERB-HANDLER";
+    public final static String rangeVerbHandler_ = "RANGE-VERB-HANDLER";
 
     public static enum ConsistencyLevel
     {
@@ -105,12 +108,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         return partitioner_;
     }
     
-    public static enum BootstrapMode
-    {
-        HINT,
-        FULL
-    }
-
     static
     {
         partitioner_ = DatabaseDescriptor.getPartitioner();
@@ -427,7 +424,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
                     */
                     if (logger_.isDebugEnabled())
                       logger_.debug("Sending hinted data to " + ep);
-                    doBootstrap(endpoint, BootstrapMode.HINT);
+                    deliverHints(endpoint);
                 }
             }
             else
@@ -448,7 +445,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             {
                 if (logger_.isDebugEnabled())
                   logger_.debug("EndPoint " + ep + " just recovered from a partition. Sending hinted data.");
-                doBootstrap(ep, BootstrapMode.HINT);
+                deliverHints(ep);
             }
         }
 
@@ -459,7 +456,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             String nodes = loadAllState.getState();
             if ( nodes != null )
             {
-                doBootstrap(ep, BootstrapMode.FULL);
+                doBootstrap(ep);
             }
         }
     }
@@ -543,76 +540,46 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     
     /**
      * This method takes a colon separated string of nodes that need
-     * to be bootstrapped. It is also used to filter some source of 
-     * data. Suppose the nodes to be bootstrapped are A, B and C. Then
-     * <i>allNodes</i> must be specified as A:B:C.
+     * to be bootstrapped. * <i>nodes</i> must be specified as A:B:C.
+     * @throws UnknownHostException 
      * 
     */
-    private void doBootstrap(String nodes)
+    private void doBootstrap(String nodes) throws UnknownHostException
     {
-        String[] allNodesAndFilter = nodes.split("-");
-        String nodesToLoad;
-        String filterSources = null;
-        
-        if ( allNodesAndFilter.length == 2 )
-        {
-            nodesToLoad = allNodesAndFilter[0];
-            filterSources = allNodesAndFilter[1];
-        }
-        else
-        {
-            nodesToLoad = allNodesAndFilter[0];
-        }        
-        String[] allNodes = nodesToLoad.split(":");
+        String[] allNodes = nodes.split(":");
         EndPoint[] endpoints = new EndPoint[allNodes.length];
         Token[] tokens = new Token[allNodes.length];
         
         for ( int i = 0; i < allNodes.length; ++i )
         {
-            endpoints[i] = new EndPoint( allNodes[i].trim(), DatabaseDescriptor.getStoragePort() );
+            String host = allNodes[i].trim();
+            InetAddress ip = InetAddress.getByName(host);
+            host = ip.getHostAddress();
+            endpoints[i] = new EndPoint( host, DatabaseDescriptor.getStoragePort() );
             tokens[i] = tokenMetadata_.getToken(endpoints[i]);
         }
         
         /* Start the bootstrap algorithm */
-        if ( filterSources == null )
         bootStrapper_.submit( new BootStrapper(endpoints, tokens) );
-        else
-        {
-            String[] allFilters = filterSources.split(":");
-            EndPoint[] filters = new EndPoint[allFilters.length];
-            for ( int i = 0; i < allFilters.length; ++i )
-            {
-                filters[i] = new EndPoint( allFilters[i].trim(), DatabaseDescriptor.getStoragePort() );
-            }
-            bootStrapper_.submit( new BootStrapper(endpoints, tokens, filters) );
-        }
     }
 
     /**
      * Starts the bootstrap operations for the specified endpoint.
-     * The name of this method is however a misnomer since it does
-     * handoff of data to the specified node when it has crashed
-     * and come back up, marked as alive after a network partition
-     * and also when it joins the ring either as an old node being
-     * relocated or as a brand new node.
-    */
-    public final void doBootstrap(EndPoint endpoint, BootstrapMode mode)
+     * @param endpoint
+     */
+    public final void doBootstrap(EndPoint endpoint)
     {
-        switch ( mode )
-        {
-            case FULL:
-                Token token = tokenMetadata_.getToken(endpoint);
-                bootStrapper_.submit(new BootStrapper(new EndPoint[]{endpoint}, token));
-                break;
-
-            case HINT:
-                /* Deliver the hinted data to this endpoint. */
-                HintedHandOffManager.instance().deliverHints(endpoint);
-                break;
-
-            default:
-                break;
-        }
+        Token token = tokenMetadata_.getToken(endpoint);
+        bootStrapper_.submit(new BootStrapper(new EndPoint[]{endpoint}, token));
+    }
+    
+    /**
+     * Deliver hints to the specified node when it has crashed
+     * and come back up/ marked as alive after a network partition
+    */
+    public final void deliverHints(EndPoint endpoint)
+    {
+        HintedHandOffManager.instance().deliverHints(endpoint);
     }
 
     /* This methods belong to the MBean interface */
@@ -660,7 +627,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
         return sb.toString();
     }
 
-    public void loadAll(String nodes)
+    public void loadAll(String nodes) throws UnknownHostException
     {        
         doBootstrap(nodes);
     }
@@ -931,16 +898,20 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      * @param key - key for which we need to find the endpoint return value -
      * the endpoint responsible for this key
      */
-    public EndPoint[] getNStorageEndPoint(String key)
+    public EndPoint[] getNStorageEndPoint(String key, int offset)
     {
-        return nodePicker_.getStorageEndPoints(partitioner_.getInitialToken(key));
+        return nodePicker_.getStorageEndPoints(partitioner_.getInitialToken(key), offset);
+    }
+    
+    private Map<String, EndPoint[]> getNStorageEndPoints(String[] keys,  int offset)
+    {
+    	return nodePicker_.getStorageEndPoints(keys, offset);
     }
     
     private Map<String, EndPoint[]> getNStorageEndPoints(String[] keys)
     {
-    	return nodePicker_.getStorageEndPoints(keys);
+    	return getNStorageEndPoints(keys, 0);
     }
-    
     
     /**
      * This method attempts to return N endpoints that are responsible for storing the
@@ -952,7 +923,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     public List<EndPoint> getNLiveStorageEndPoint(String key)
     {
     	List<EndPoint> liveEps = new ArrayList<EndPoint>();
-    	EndPoint[] endpoints = getNStorageEndPoint(key);
+    	EndPoint[] endpoints = getNStorageEndPoint(key, 0);
     	
     	for ( EndPoint endpoint : endpoints )
     	{
@@ -983,7 +954,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      */
     public EndPoint[] getNStorageEndPoint(Token token)
     {
-        return nodePicker_.getStorageEndPoints(token);
+        return nodePicker_.getStorageEndPoints(token, 0);
     }
     
     /**
@@ -996,16 +967,21 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      */
     protected EndPoint[] getNStorageEndPoint(Token token, Map<Token, EndPoint> tokenToEndPointMap)
     {
-        return nodePicker_.getStorageEndPoints(token, tokenToEndPointMap);
+        return nodePicker_.getStorageEndPoints(token, tokenToEndPointMap, 0);
+    }
+
+    public EndPoint findSuitableEndPoint(String key) throws IOException
+    {
+        return findSuitableEndPoint(key, 0);
     }
 
     /**
      * This function finds the most suitable endpoint given a key.
      * It checks for locality and alive test.
      */
-	public EndPoint findSuitableEndPoint(String key) throws IOException
+	public EndPoint findSuitableEndPoint(String key, int offset) throws IOException
 	{
-		EndPoint[] endpoints = getNStorageEndPoint(key);
+		EndPoint[] endpoints = getNStorageEndPoint(key, offset);
 		for(EndPoint endPoint: endpoints)
 		{
 			if(endPoint.equals(StorageService.getLocalStorageEndPoint()))

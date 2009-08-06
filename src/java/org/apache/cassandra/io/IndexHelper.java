@@ -18,15 +18,13 @@
 
 package org.apache.cassandra.io;
 
-import java.io.DataInput;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.util.*;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.db.ColumnSerializer;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.utils.BloomFilter;
 
 
 /**
@@ -131,11 +129,11 @@ public class IndexHelper
     /**
      * Deserialize the index into a structure and return the number of bytes read.
      * @param tableName
-     *@param in Input from which the serialized form of the index is read
+     * @param in Input from which the serialized form of the index is read
      * @param columnIndexList the structure which is filled in with the deserialized index   @return number of bytes read from the input
      * @throws IOException
      */
-	static int deserializeIndex(String tableName, String cfName, DataInput in, List<ColumnIndexInfo> columnIndexList) throws IOException
+	public static int deserializeIndex(String tableName, String cfName, DataInput in, List<ColumnIndexInfo> columnIndexList) throws IOException
 	{
 		/* read only the column index list */
 		int columnIndexSize = in.readInt();
@@ -220,7 +218,7 @@ public class IndexHelper
 	 * @param totalNumCols the total number of columns
 	 * @return a list of subranges which contain all the columns in columnNames
 	 */
-	static List<ColumnRange> getMultiColumnRangesFromNameIndex(SortedSet<byte[]> columnNames, List<IndexHelper.ColumnIndexInfo> columnIndexList, int dataSize, int totalNumCols)
+	public static List<ColumnRange> getMultiColumnRangesFromNameIndex(SortedSet<byte[]> columnNames, List<IndexHelper.ColumnIndexInfo> columnIndexList, int dataSize, int totalNumCols)
 	{
 		List<ColumnRange> columnRanges = new ArrayList<ColumnRange>();
 
@@ -246,6 +244,40 @@ public class IndexHelper
         return columnRanges;
 	}
 
+    /**
+     * Reads the column name indexes if present. If the
+     * indexes are based on time then skip over them.
+     */
+    public static int readColumnIndexes(RandomAccessFile file, String tableName, String cfName, List<ColumnIndexInfo> columnIndexList) throws IOException
+    {
+        /* check if we have an index */
+        boolean hasColumnIndexes = file.readBoolean();
+        int totalBytesRead = 1;
+        /* if we do then deserialize the index */
+        if (hasColumnIndexes)
+        {
+            /* read the index */
+            totalBytesRead += deserializeIndex(tableName, cfName, file, columnIndexList);
+        }
+        return totalBytesRead;
+    }
+
+    /**
+     * Defreeze the bloom filter.
+     *
+     * @return bloom filter summarizing the column information
+     * @throws java.io.IOException
+     */
+    public static BloomFilter defreezeBloomFilter(RandomAccessFile file) throws IOException
+    {
+        int size = file.readInt();
+        byte[] bytes = new byte[size];
+        file.readFully(bytes);
+        DataInputBuffer bufIn = new DataInputBuffer();
+        bufIn.reset(bytes, bytes.length);
+        return BloomFilter.serializer().deserialize(bufIn);
+    }
+
 
     /**
      * A column range containing the start and end
@@ -265,21 +297,21 @@ public class IndexHelper
             columnCount_ = columnCount;
         }
         
-        Coordinate coordinate()
+        public Coordinate coordinate()
         {
             return coordinate_;
         }
         
-        int count()
+        public int count()
         {
             return columnCount_;
         }                
     }
 
-	/**
-	 * A helper class to generate indexes while
+    /**
+     * A helper class to generate indexes while
      * the columns are sorted by name on disk.
-	*/
+     */
     public static class ColumnIndexInfo implements Comparable<ColumnIndexInfo>
     {
         private long position_;
@@ -311,7 +343,7 @@ public class IndexHelper
             position_ = position;
         }
         
-        int count()
+        public int count()
         {
             return columnCount_;
         }
