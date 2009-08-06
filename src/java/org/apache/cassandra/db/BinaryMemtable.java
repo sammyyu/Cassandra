@@ -164,13 +164,7 @@ public class BinaryMemtable
         writer = new SSTableWriter(path, keys.size(), StorageService.getPartitioner());
         final IPartitioner partitioner = StorageService.getPartitioner();
         final Comparator<String> dc = partitioner.getDecoratedKeyComparator();
-        Collections.sort(keys, new Comparator<String>()
-        {
-            public int compare(String o1, String o2)
-            {
-                return dc.compare(o1, o2);
-            }
-        });
+        Collections.sort(keys, dc);
         
         /* Use this BloomFilter to decide if a key exists in a SSTable */
         for ( String key : keys )
