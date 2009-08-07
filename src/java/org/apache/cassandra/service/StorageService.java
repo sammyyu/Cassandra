@@ -746,7 +746,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     {
         if (DatabaseDescriptor.getTable(tableName) == null)
             return;
-        
+
         Table table = Table.open(tableName);
         Set<String> columnFamilies = table.getColumnFamilies();
         for (String columnFamily : columnFamilies)
@@ -771,7 +771,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     public void setCompactionThreshold(int threshold) {
         MinorCompactionManager.setCompactionThreshold(threshold);
     }
-
 
     /* End of MBean interface methods */
     
@@ -929,20 +928,16 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      * @param key - key for which we need to find the endpoint return value -
      * the endpoint responsible for this key
      */
-    public EndPoint[] getNStorageEndPoint(String key, int offset)
+    public EndPoint[] getNStorageEndPoint(String key)
     {
-        return nodePicker_.getStorageEndPoints(partitioner_.getInitialToken(key), offset);
-    }
-    
-    private Map<String, EndPoint[]> getNStorageEndPoints(String[] keys,  int offset)
-    {
-    	return nodePicker_.getStorageEndPoints(keys, offset);
+        return nodePicker_.getStorageEndPoints(partitioner_.getInitialToken(key));
     }
     
     private Map<String, EndPoint[]> getNStorageEndPoints(String[] keys)
     {
-    	return getNStorageEndPoints(keys, 0);
+    	return nodePicker_.getStorageEndPoints(keys);
     }
+    
     
     /**
      * This method attempts to return N endpoints that are responsible for storing the
@@ -954,7 +949,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
     public List<EndPoint> getNLiveStorageEndPoint(String key)
     {
     	List<EndPoint> liveEps = new ArrayList<EndPoint>();
-    	EndPoint[] endpoints = getNStorageEndPoint(key, 0);
+    	EndPoint[] endpoints = getNStorageEndPoint(key);
     	
     	for ( EndPoint endpoint : endpoints )
     	{
@@ -985,7 +980,7 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      */
     public EndPoint[] getNStorageEndPoint(Token token)
     {
-        return nodePicker_.getStorageEndPoints(token, 0);
+        return nodePicker_.getStorageEndPoints(token);
     }
     
     /**
@@ -998,21 +993,16 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
      */
     protected EndPoint[] getNStorageEndPoint(Token token, Map<Token, EndPoint> tokenToEndPointMap)
     {
-        return nodePicker_.getStorageEndPoints(token, tokenToEndPointMap, 0);
-    }
-
-    public EndPoint findSuitableEndPoint(String key) throws IOException
-    {
-        return findSuitableEndPoint(key, 0);
+        return nodePicker_.getStorageEndPoints(token, tokenToEndPointMap);
     }
 
     /**
      * This function finds the most suitable endpoint given a key.
      * It checks for locality and alive test.
      */
-	public EndPoint findSuitableEndPoint(String key, int offset) throws IOException
+	public EndPoint findSuitableEndPoint(String key) throws IOException
 	{
-		EndPoint[] endpoints = getNStorageEndPoint(key, offset);
+		EndPoint[] endpoints = getNStorageEndPoint(key);
 		for(EndPoint endPoint: endpoints)
 		{
 			if(endPoint.equals(StorageService.getLocalStorageEndPoint()))

@@ -132,6 +132,8 @@ public class CassandraServer implements Cassandra.Iface
             thriftColumns.add(thrift_column);
         }
 
+        // we have to do the reversing here, since internally we pass results around in ColumnFamily
+        // objects, which always sort their columns in the "natural" order
         if (reverseOrder)
             Collections.reverse(thriftColumns);
         return thriftColumns;
@@ -550,7 +552,14 @@ public class CassandraServer implements Cassandra.Iface
             throw new InvalidRequestException("maxResults must be positive");
         }
 
-        return StorageProxy.getKeyRange(new RangeCommand(tablename, columnFamily, startWith, stopAt, maxResults));
+        try
+        {
+            return StorageProxy.getKeyRange(new RangeCommand(tablename, columnFamily, startWith, stopAt, maxResults));
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     // main method moved to CassandraDaemon
