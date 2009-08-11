@@ -20,9 +20,7 @@ package org.apache.cassandra.cli;
 import org.apache.thrift.*;
 
 import org.antlr.runtime.tree.*;
-import org.apache.cassandra.cql.common.Utils;
 import org.apache.cassandra.service.*;
-import org.apache.cassandra.utils.LogUtil;
 
 import java.util.*;
 import java.io.UnsupportedEncodingException;
@@ -91,23 +89,19 @@ public class CliClient
     private void printCmdHelp()
     {
        css_.out.println("List of all CLI commands:");
-       css_.out.println("?                                                         Same as help.");
-       css_.out.println("connect <hostname>/<port>                                 Connect to Cassandra's thrift service.");
-       css_.out.println("describe keyspace <keyspacename>                          Describe keyspace.");
-       css_.out.println("exit                                                      Exit CLI.");
-       css_.out.println("explain plan [<set stmt>|<get stmt>|<select stmt>]        Explains the PLAN for specified stmt.");
-       css_.out.println("help                                                      Display this help.");
-       css_.out.println("quit                                                      Exit CLI.");
-       css_.out.println("show config file                                          Display contents of config file");
-       css_.out.println("show cluster name                                         Display cassandra server version");
-       css_.out.println("show keyspaces                                               Show list of keyspaces.");
-       css_.out.println("show version                                              Show server version.");
-       css_.out.println("select ...                                                CQL select statement (TBD).");
-       css_.out.println("get ...                                                   CQL data retrieval statement.");
-       css_.out.println("set ...                                                   CQL DML statement.");
-       css_.out.println("thrift get <tbl>.<cf>['<rowKey>']                         (will be deprecated)");            
-       css_.out.println("thrift get <tbl>.<cf>['<rowKey>']['<colKey>']             (will be deprecated)");            
-       css_.out.println("thrift set <tbl>.<cf>['<rowKey>']['<colKey>'] = '<value>' (will be deprecated)");    
+       css_.out.println("?                                                      Same as help.");
+       css_.out.println("connect <hostname>/<port>                              Connect to Cassandra's thrift service.");
+       css_.out.println("describe keyspace <keyspacename>                       Describe keyspace.");
+       css_.out.println("exit                                                   Exit CLI.");
+       css_.out.println("help                                                   Display this help.");
+       css_.out.println("quit                                                   Exit CLI.");
+       css_.out.println("show config file                                       Display contents of config file");
+       css_.out.println("show cluster name                                      Display cluster name.");
+       css_.out.println("show keyspaces                                         Show list of keyspaces.");
+       css_.out.println("show version                                           Show server version.");
+       css_.out.println("get <tbl>.<cf>['<rowKey>']                             Get a slice of columns.");            
+       css_.out.println("get <tbl>.<cf>['<rowKey>']['<colKey>']                 Get a column value.");            
+       css_.out.println("set <tbl>.<cf>['<rowKey>']['<colKey>'] = '<value>'     Set a column.");    
     }
 
     private void cleanupAndExit()
@@ -137,14 +131,23 @@ public class CliClient
         if (columnSpecCnt == 0)
         {
             // table.cf['key']
-        	List<Column> columns = new ArrayList<Column>();
-      		columns = thriftClient_.get_slice(tableName, key, new ColumnParent(columnFamily, null), ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, 1000000, ConsistencyLevel.ONE);
+            SliceRange range = new SliceRange(ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, 1000000);
+      	    List<ColumnOrSuperColumn> columns = thriftClient_.get_slice(tableName, key, new ColumnParent(columnFamily, null), new SlicePredicate(null, range), ConsistencyLevel.ONE);
             int size = columns.size();
-            for (Iterator<Column> colIter = columns.iterator(); colIter.hasNext(); )
+            for (ColumnOrSuperColumn cosc : columns)
             {
-                Column column = colIter.next();
-                css_.out.printf("  (column=%s, value=%s; timestamp=%d)\n",
-                                 column.name, column.value, column.timestamp);
+                Column column = cosc.column;
+                try
+                {
+                    css_.out.printf("  (column=%s, value=%s; timestamp=%d)\n",
+                                    new String(column.name, "UTF-8"),
+                                    new String(column.value, "UTF-8"),
+                                    column.timestamp);
+                }
+                catch (UnsupportedEncodingException e)
+                {
+                    throw new RuntimeException(e);
+                }
             }
             css_.out.println("Returned " + size + " rows.");
         }
@@ -153,17 +156,20 @@ public class CliClient
             assert columnSpecCnt == 1;
             // table.cf['key']['column']
             String columnName = CliCompiler.getColumn(columnFamilySpec, 0);
-            Column column = new Column();
+            ColumnOrSuperColumn cosc;
             try
             {
-                column = thriftClient_.get_column(tableName, key, new ColumnPath(columnFamily, null, columnName.getBytes("UTF-8")), ConsistencyLevel.ONE);
+                cosc = thriftClient_.get(tableName, key, new ColumnPath(columnFamily, null, columnName.getBytes("UTF-8")), ConsistencyLevel.ONE);
+                Column column = cosc.column;
+                css_.out.printf("==> (name=%s, value=%s; timestamp=%d)\n",
+                        new String(column.name, "UTF-8"),
+                        new String(column.value, "UTF-8"),
+                        column.timestamp);
             }
             catch (UnsupportedEncodingException e)
             {
                 throw new RuntimeException(e);
             }
-            css_.out.printf("==> (name=%s, value=%s; timestamp=%d)\n",
-                            column.name, column.value, column.timestamp);
         }
     }
 
@@ -183,7 +189,7 @@ public class CliClient
         String key           = CliCompiler.getKey(columnFamilySpec);
         String columnFamily  = CliCompiler.getColumnFamily(columnFamilySpec);
         int    columnSpecCnt = CliCompiler.numColumnSpecifiers(columnFamilySpec);
-        String value         = Utils.unescapeSQLString(ast.getChild(1).getText());
+        String value         = CliUtils.unescapeSQLString(ast.getChild(1).getText());
 
         // assume simple columnFamily for now
         if (columnSpecCnt == 1)
@@ -291,45 +297,5 @@ public class CliClient
         css_.hostName = hostName.toString();
         css_.thriftPort = portNumber;
         CliMain.connect(css_.hostName, css_.thriftPort);
-    }
-
-    // execute CQL query on server
-    public void executeQueryOnServer(String query) throws TException
-    {
-        if (!CliMain.isConnected())
-            return;
-        
-        CqlResult result = thriftClient_.execute_query(query);
-        
-        if (result == null)
-        {
-            css_.out.println("Unexpected error. Received null result from server.");
-            return;
-        }
-
-        if ((result.error_txt != null) || (result.error_code != 0))
-        {
-            css_.out.println("Error: " + result.error_txt);
-        }
-        else
-        {
-            List<Map<String, String>> rows = result.result_set;
-            
-            if (rows != null)
-            {
-                for (Map<String, String> row : rows)
-                {
-                    for (Iterator<Map.Entry<String, String>> it = row.entrySet().iterator(); it.hasNext(); )
-                    {
-                        Map.Entry<String, String> entry = it.next();
-                        String key = entry.getKey();
-                        String value = entry.getValue();
-                        css_.out.print(key + " = " + value + "; ");
-                    }
-                    css_.out.println();
-                }
-            }
-            css_.out.println("Statement processed.");
-        }
     }
 }

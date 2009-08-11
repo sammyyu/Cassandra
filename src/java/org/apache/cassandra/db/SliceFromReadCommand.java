@@ -27,36 +27,34 @@ import org.apache.cassandra.service.ColumnParent;
 
 public class SliceFromReadCommand extends ReadCommand
 {
-    public final QueryPath column_parent;
     public final byte[] start, finish;
-    public final boolean isAscending;
+    public final boolean reversed;
     public final int count;
 
-    public SliceFromReadCommand(String table, String key, ColumnParent column_parent, byte[] start, byte[] finish, boolean isAscending, int count)
+    public SliceFromReadCommand(String table, String key, ColumnParent column_parent, byte[] start, byte[] finish, boolean reversed, int count)
     {
-        this(table, key, new QueryPath(column_parent), start, finish, isAscending, count);
+        this(table, key, new QueryPath(column_parent), start, finish, reversed, count);
     }
 
-    public SliceFromReadCommand(String table, String key, QueryPath columnParent, byte[] start, byte[] finish, boolean isAscending, int count)
+    public SliceFromReadCommand(String table, String key, QueryPath path, byte[] start, byte[] finish, boolean reversed, int count)
     {
-        super(table, key, CMD_TYPE_GET_SLICE);
-        this.column_parent = columnParent;
+        super(table, key, path, CMD_TYPE_GET_SLICE);
         this.start = start;
         this.finish = finish;
-        this.isAscending = isAscending;
+        this.reversed = reversed;
         this.count = count;
     }
 
     @Override
     public String getColumnFamilyName()
     {
-        return column_parent.columnFamilyName;
+        return queryPath.columnFamilyName;
     }
 
     @Override
     public ReadCommand copy()
     {
-        ReadCommand readCommand = new SliceFromReadCommand(table, key, column_parent, start, finish, isAscending, count);
+        ReadCommand readCommand = new SliceFromReadCommand(table, key, queryPath, start, finish, reversed, count);
         readCommand.setDigestQuery(isDigestQuery());
         return readCommand;
     }
@@ -64,7 +62,7 @@ public class SliceFromReadCommand extends ReadCommand
     @Override
     public Row getRow(Table table) throws IOException
     {
-        return table.getRow(new SliceQueryFilter(key, column_parent, start, finish, isAscending, count));
+        return table.getRow(new SliceQueryFilter(key, queryPath, start, finish, reversed, count));
     }
 
     @Override
@@ -73,10 +71,10 @@ public class SliceFromReadCommand extends ReadCommand
         return "SliceFromReadCommand(" +
                "table='" + table + '\'' +
                ", key='" + key + '\'' +
-               ", column_parent='" + column_parent + '\'' +
+               ", column_parent='" + queryPath + '\'' +
                ", start='" + getComparator().getString(start) + '\'' +
                ", finish='" + getComparator().getString(finish) + '\'' +
-               ", isAscending=" + isAscending +
+               ", reversed=" + reversed +
                ", count=" + count +
                ')';
     }
@@ -91,10 +89,10 @@ class SliceFromReadCommandSerializer extends ReadCommandSerializer
         dos.writeBoolean(realRM.isDigestQuery());
         dos.writeUTF(realRM.table);
         dos.writeUTF(realRM.key);
-        realRM.column_parent.serialize(dos);
+        realRM.queryPath.serialize(dos);
         ColumnSerializer.writeName(realRM.start, dos);
         ColumnSerializer.writeName(realRM.finish, dos);
-        dos.writeBoolean(realRM.isAscending);
+        dos.writeBoolean(realRM.reversed);
         dos.writeInt(realRM.count);
     }
 

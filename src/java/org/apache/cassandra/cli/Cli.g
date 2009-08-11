@@ -16,13 +16,7 @@
  * limitations under the License.
  */
 
-//
 // ANTLR Grammar for the Cassandra Command Line Interface (CLI).
-//
-// Note: This grammar handles all but the CQL statements. CQL
-// statements are detected separately (based on the first token)
-// and directly sent to server-side for processing.
-//
 
 grammar Cli;
 
@@ -85,7 +79,7 @@ stmt
 
 connectStmt
     : K_CONNECT host SLASH port -> ^(NODE_CONNECT host port)
-    | K_CONNECT ip SLASH port -> ^(NODE_CONNECT ip port)
+    | K_CONNECT ipaddr SLASH port -> ^(NODE_CONNECT ipaddr port)
     ;
 
 helpStmt
@@ -99,11 +93,11 @@ exitStmt
     ;
 
 getStmt
-    : K_THRIFT K_GET columnFamilyExpr -> ^(NODE_THRIFT_GET columnFamilyExpr)
+    : K_GET columnFamilyExpr -> ^(NODE_THRIFT_GET columnFamilyExpr)
     ;
 
 setStmt
-    : K_THRIFT K_SET columnFamilyExpr '=' value -> ^(NODE_THRIFT_SET columnFamilyExpr value)
+    : K_SET columnFamilyExpr '=' value -> ^(NODE_THRIFT_SET columnFamilyExpr value)
     ;
 
 showStmt
@@ -150,9 +144,9 @@ value: StringLiteral;
 
 columnOrSuperColumn: StringLiteral;
 
-host: id+=HostIdentifier -> ^(NODE_ID_LIST $id+);
+host: id+=Identifier (id+=DOT id+=Identifier)* -> ^(NODE_ID_LIST $id+);
 
-ip: id+=IntegerLiteral id+=DOT id+=IntegerLiteral id+=DOT id+=IntegerLiteral id+=DOT id+=IntegerLiteral -> ^(NODE_ID_LIST $id+);
+ipaddr: id+=IntegerLiteral id+=DOT id+=IntegerLiteral id+=DOT id+=IntegerLiteral id+=DOT id+=IntegerLiteral -> ^(NODE_ID_LIST $id+);
 
 port: IntegerLiteral;
 
@@ -180,7 +174,6 @@ K_SET:        'SET';
 K_SHOW:       'SHOW';
 K_TABLE:      'KEYSPACE';
 K_TABLES:     'KEYSPACES';
-K_THRIFT:     'THRIFT';
 K_VERSION:    'VERSION';
 
 // private syntactic rules
@@ -195,9 +188,15 @@ Digit
     : '0'..'9'
     ;
 
+fragment
+Alnum
+    : Letter
+    | Digit
+    ;
+
 // syntactic Elements
 Identifier
-    : Letter ( Letter | Digit | '_')*
+    : Letter ( Alnum | '_' )*
     ;
 
 // literals
@@ -206,13 +205,9 @@ StringLiteral
     '\'' (~'\'')* '\'' ( '\'' (~'\'')* '\'' )* 
     ;
 
+
 IntegerLiteral
    : Digit+;
-
-
-HostIdentifier
-    : ( Letter | Digit ) ( Letter | Digit | DOT | '-' )* ( Letter | Digit )
-    ;
 
 //
 // syntactic elements

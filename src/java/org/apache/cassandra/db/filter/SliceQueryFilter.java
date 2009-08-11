@@ -2,27 +2,29 @@ package org.apache.cassandra.db.filter;
 
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.Arrays;
+import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.collections.comparators.ReverseComparator;
+import org.apache.commons.collections.iterators.ReverseListIterator;
 
 import org.apache.cassandra.io.SSTableReader;
-import org.apache.cassandra.utils.ReducingIterator;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.marshal.AbstractType;
 
 public class SliceQueryFilter extends QueryFilter
 {
     public final byte[] start, finish;
-    public final boolean isAscending;
+    public final boolean reversed;
     public final int count;
 
-    public SliceQueryFilter(String key, QueryPath columnParent, byte[] start, byte[] finish, boolean ascending, int count)
+    public SliceQueryFilter(String key, QueryPath columnParent, byte[] start, byte[] finish, boolean reversed, int count)
     {
         super(key, columnParent);
         this.start = start;
         this.finish = finish;
-        isAscending = ascending;
+        this.reversed = reversed;
         this.count = count;
     }
 
@@ -33,58 +35,52 @@ public class SliceQueryFilter extends QueryFilter
 
     public ColumnIterator getSSTableColumnIterator(SSTableReader sstable, AbstractType comparator) throws IOException
     {
-        return new SSTableSliceIterator(sstable.getFilename(), key, getColumnFamilyName(), comparator, start, isAscending);
+        return new SSTableSliceIterator(sstable.getFilename(), key, comparator, start, reversed);
     }
 
-    public void filterSuperColumn(SuperColumn superColumn, int gcBefore)
+    public SuperColumn filterSuperColumn(SuperColumn superColumn, int gcBefore)
     {
-        int liveColumns = 0;
-
-        for (IColumn column : superColumn.getSubColumns())
+        SuperColumn scFiltered = superColumn.cloneMeShallow();
+        Iterator<IColumn> subcolumns;
+        if (reversed)
         {
-            final boolean outOfRange = isAscending
-                                     ? (start.length > 0 && superColumn.getComparator().compare(column.name(), start) < 0)
-                                        || (finish.length > 0 && superColumn.getComparator().compare(column.name(), finish) > 0)
-                                     : (start.length > 0 && superColumn.getComparator().compare(column.name(), start) > 0)
-                                        || (finish.length > 0 && superColumn.getComparator().compare(column.name(), finish) < 0);
-            if (outOfRange
-                || (column.isMarkedForDelete() && column.getLocalDeletionTime() <= gcBefore)
-                || liveColumns > count)
-            {
-                superColumn.remove(column.name());
-            }
-            else if (!column.isMarkedForDelete())
-            {
-                liveColumns++;
-            }
+            List<IColumn> columnsAsList = new ArrayList<IColumn>(superColumn.getSubColumns());
+            subcolumns = new ReverseListIterator(columnsAsList);
         }
+        else
+        {
+            subcolumns = superColumn.getSubColumns().iterator();
+        }
+        collectReducedColumns(scFiltered, subcolumns, gcBefore);
+        return scFiltered;
     }
 
     @Override
     public Comparator<IColumn> getColumnComparator(AbstractType comparator)
     {
-        return isAscending ? super.getColumnComparator(comparator) : new ReverseComparator(super.getColumnComparator(comparator));
+        return reversed ? new ReverseComparator(super.getColumnComparator(comparator)) : super.getColumnComparator(comparator);
     }
 
-    public void collectColumns(ColumnFamily returnCF, ReducingIterator<IColumn> reducedColumns, int gcBefore)
+    public void collectReducedColumns(IColumnContainer container, Iterator<IColumn> reducedColumns, int gcBefore)
     {
         int liveColumns = 0;
-        AbstractType comparator = returnCF.getComparator();
+        AbstractType comparator = container.getComparator();
 
-        for (IColumn column : reducedColumns)
+        while (reducedColumns.hasNext())
         {
+            IColumn column = reducedColumns.next();
             if (liveColumns >= count)
                 break;
             if (finish.length > 0
-                && ((isAscending && comparator.compare(column.name(), finish) > 0))
-                    || (!isAscending && comparator.compare(column.name(), finish) < 0))
+                && ((!reversed && comparator.compare(column.name(), finish) > 0))
+                    || (reversed && comparator.compare(column.name(), finish) < 0))
                 break;
 
             if (!column.isMarkedForDelete())
                 liveColumns++;
 
             if (!column.isMarkedForDelete() || column.getLocalDeletionTime() > gcBefore)
-                returnCF.addColumn(column);
+                container.addColumn(column);
         }
     }
 }

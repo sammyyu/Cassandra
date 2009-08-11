@@ -52,6 +52,7 @@ public class DatabaseDescriptor
     private static int storagePort_ = 7000;
     private static int controlPort_ = 7001;
     private static int thriftPort_ = 9160;
+    private static boolean thriftFramed_ = false;
     private static String listenAddress_; // leave null so we can fall through to getLocalHost
     private static String thriftAddress_;
     private static String clusterName_ = "Test";
@@ -67,6 +68,9 @@ public class DatabaseDescriptor
     private static int consistencyThreads_ = 4; // not configurable
     private static int concurrentReaders_ = 8;
     private static int concurrentWriters_ = 32;
+
+    private static double flushDataBufferSizeInMB_ = 32;
+    private static double flushIndexBufferSizeInMB_ = 8;
     private static List<String> tables_ = new ArrayList<String>();
     private static Set<String> applicationColumnFamilies_ = new HashSet<String>();
 
@@ -144,9 +148,16 @@ public class DatabaseDescriptor
                 // Bool.valueOf will silently assume false for values it doesn't recognize
                 throw new ConfigurationException("Unrecognized value for CommitLogSync.  Use 'true' or 'false'.");
             }
-            commitLogSync_ = Boolean.valueOf(xmlUtils.getNodeValue("/Storage/CommitLogSync"));
+            commitLogSync_ = Boolean.valueOf(syncRaw);
 
-            commitLogSyncDelay_ = Integer.valueOf(xmlUtils.getNodeValue("/Storage/CommitLogSyncDelay"));
+            try
+            {
+                commitLogSyncDelay_ = Integer.valueOf(xmlUtils.getNodeValue("/Storage/CommitLogSyncDelay"));
+            }
+            catch (Exception e)
+            {
+                throw new ConfigurationException("Unrecognized value for CommitLogSyncDelay.  Integer expected.");
+            }
 
             /* Hashing strategy */
             String partitionerClassName = xmlUtils.getNodeValue("/Storage/Partitioner");
@@ -217,6 +228,17 @@ public class DatabaseDescriptor
                 concurrentWriters_ = Integer.parseInt(rawWriters);
             }
 
+            String rawFlushData = xmlUtils.getNodeValue("/Storage/FlushDataBufferSizeInMB");
+            if (rawFlushData != null)
+            {
+                flushDataBufferSizeInMB_ = Double.parseDouble(rawFlushData);
+            }
+            String rawFlushIndex = xmlUtils.getNodeValue("/Storage/FlushIndexBufferSizeInMB");
+            if (rawFlushIndex != null)
+            {
+                flushIndexBufferSizeInMB_ = Double.parseDouble(rawFlushIndex);
+            }
+
             /* TCP port on which the storage system listens */
             String port = xmlUtils.getNodeValue("/Storage/StoragePort");
             if ( port != null )
@@ -241,6 +263,23 @@ public class DatabaseDescriptor
             port = xmlUtils.getNodeValue("/Storage/ThriftPort");
             if (port != null)
                 thriftPort_ = Integer.parseInt(port);
+
+            /* Framed (Thrift) transport (default to "no") */
+            String framedRaw = xmlUtils.getNodeValue("/Storage/ThriftFramedTransport");
+            if (framedRaw != null)
+            {
+                if (framedRaw.compareToIgnoreCase("true") == 0 || 
+                        framedRaw.compareToIgnoreCase("false") == 0)
+                {
+                    thriftFramed_ = Boolean.valueOf(framedRaw);
+                }
+                else
+                {
+                    throw new ConfigurationException("Unrecognized value " + 
+                            "for ThriftFramedTransport.  Use 'true' or 'false'."); 
+                }
+            }
+            
 
             /* Number of days to keep the memtable around w/o flushing */
             String lifetime = xmlUtils.getNodeValue("/Storage/MemtableLifetimeInDays");
@@ -501,6 +540,11 @@ public class DatabaseDescriptor
         {
             throw new RuntimeException(e);
         }
+    }
+
+    public static boolean isThriftFramed()
+    {
+        return thriftFramed_;
     }
 
     private static AbstractType getComparator(Node columnFamily, String attr)
@@ -901,5 +945,15 @@ public class DatabaseDescriptor
     public static boolean isCommitLogSyncEnabled()
     {
         return commitLogSync_;
+    }
+
+    public static double getFlushDataBufferSizeInMB()
+    {
+        return flushDataBufferSizeInMB_;
+    }
+
+    public static double getFlushIndexBufferSizeInMB()
+    {
+        return flushIndexBufferSizeInMB_;
     }
 }

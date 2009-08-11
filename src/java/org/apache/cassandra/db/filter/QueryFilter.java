@@ -38,13 +38,13 @@ public abstract class QueryFilter
      * by the filter code, which should have some limit on the number of columns
      * to avoid running out of memory on large rows.
      */
-    public abstract void collectColumns(ColumnFamily returnCF, ReducingIterator<IColumn> reducedColumns, int gcBefore);
+    public abstract void collectReducedColumns(IColumnContainer container, Iterator<IColumn> reducedColumns, int gcBefore);
 
     /**
      * subcolumns of a supercolumn are unindexed, so to pick out parts of those we operate in-memory.
-     * @param superColumn
+     * @param superColumn may be modified by filtering op.
      */
-    public abstract void filterSuperColumn(SuperColumn superColumn, int gcBefore);
+    public abstract SuperColumn filterSuperColumn(SuperColumn superColumn, int gcBefore);
 
     public Comparator<IColumn> getColumnComparator(final AbstractType comparator)
     {
@@ -57,7 +57,7 @@ public abstract class QueryFilter
         };
     }
     
-    public void collectColumns(final ColumnFamily returnCF, Iterator collatedColumns, int gcBefore)
+    public void collectCollatedColumns(final ColumnFamily returnCF, Iterator<IColumn> collatedColumns, int gcBefore)
     {
         // define a 'reduced' iterator that merges columns w/ the same name, which
         // greatly simplifies computing liveColumns in the presence of tombstones.
@@ -83,7 +83,7 @@ public abstract class QueryFilter
             }
         };
 
-        collectColumns(returnCF, reduced, gcBefore);
+        collectReducedColumns(returnCF, reduced, gcBefore);
     }
 
     public String getColumnFamilyName()

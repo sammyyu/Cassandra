@@ -11,11 +11,12 @@ public class IdentityQueryFilter extends SliceQueryFilter
      */
     public IdentityQueryFilter(String key, QueryPath path)
     {
-        super(key, path, ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, true, Integer.MAX_VALUE);
+        super(key, path, ArrayUtils.EMPTY_BYTE_ARRAY, ArrayUtils.EMPTY_BYTE_ARRAY, false, Integer.MAX_VALUE);
     }
 
-    public void filterSuperColumn(SuperColumn superColumn, int gcBefore)
+    public SuperColumn filterSuperColumn(SuperColumn superColumn, int gcBefore)
     {
         // no filtering done, deliberately
+        return superColumn;
     }
 }
