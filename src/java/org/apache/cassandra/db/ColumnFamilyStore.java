@@ -1358,12 +1358,14 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     public ColumnFamily getColumnFamily(String key, QueryPath path, byte[] start, byte[] finish, boolean isAscending, int limit) throws IOException
     {
-        return getColumnFamily(new SliceQueryFilter(key, path, start, finish, isAscending, limit));
+        ColumnFamily cf = getColumnFamily(new SliceQueryFilter(key, path, start, finish, isAscending, limit));
+        return cf;
     }
 
     public ColumnFamily getColumnFamily(QueryFilter filter) throws IOException
     {
-        return getColumnFamily(filter, getDefaultGCBefore());
+        ColumnFamily cf = getColumnFamily(filter, getDefaultGCBefore());
+        return cf;
     }
 
     /**
@@ -1376,6 +1378,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         assert columnFamily_.equals(filter.getColumnFamilyName());
 
         // if we are querying subcolumns of a supercolumn, fetch the supercolumn with NQF, then filter in-memory.
+        long start = System.currentTimeMillis();
         if (filter.path.superColumnName != null)
         {
             QueryFilter nameFilter = new NamesQueryFilter(filter.key, new QueryPath(columnFamily_), filter.path.superColumnName);
@@ -1387,6 +1390,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                     filter.filterSuperColumn((SuperColumn)column, gcBefore);
                 }
             }
+            readStats_.add(System.currentTimeMillis() - start);
             return removeDeleted(cf, gcBefore);
         }
 
@@ -1456,6 +1460,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                 }
             }
 
+            readStats_.add(System.currentTimeMillis() - start);
             sstableLock_.readLock().unlock();
         }
     }
