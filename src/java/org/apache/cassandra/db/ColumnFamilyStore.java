@@ -90,7 +90,6 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     private ReentrantReadWriteLock sstableLock_ = new ReentrantReadWriteLock(true);
 
     private TimedStatsDeque readStats_ = new TimedStatsDeque(60000);
-    private TimedStatsDeque diskReadStats_ = new TimedStatsDeque(60000);
     private TimedStatsDeque writeStats_ = new TimedStatsDeque(60000);
 
     ColumnFamilyStore(String table, String columnFamilyName, boolean isSuper, int indexValue) throws IOException
@@ -1327,11 +1326,6 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return readStats_.size();
     }
 
-    public int getReadDiskHits()
-    {
-        return diskReadStats_.size();
-    }
-
     public double getReadLatency()
     {
         return readStats_.mean();
@@ -1375,6 +1369,8 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     {
         assert columnFamily_.equals(filter.getColumnFamilyName());
 
+        long start = System.currentTimeMillis();
+
         // if we are querying subcolumns of a supercolumn, fetch the supercolumn with NQF, then filter in-memory.
         if (filter.path.superColumnName != null)
         {
@@ -1388,6 +1384,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             SuperColumn scFiltered = filter.filterSuperColumn(sc, gcBefore);
             ColumnFamily cfFiltered = cf.cloneMeShallow();
             cfFiltered.addColumn(scFiltered);
+            readStats_.add(System.currentTimeMillis() - start);
             return cfFiltered;
         }
 
@@ -1457,6 +1454,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
                 }
             }
 
+            readStats_.add(System.currentTimeMillis() - start);
             sstableLock_.readLock().unlock();
         }
     }
