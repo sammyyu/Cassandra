@@ -288,12 +288,6 @@ public class CommitLog
                 /* remove column families that have already been flushed */
                 for (ColumnFamily columnFamily : columnFamilies)
                 {
-                    /* TODO: Remove this to not process Hints */
-                    if (columnFamily.name().equals(HintedHandOffManager.HINTS_CF))
-                    {
-                        row.removeColumnFamily(columnFamily);
-                        continue;
-                    }
                     int id = table.getColumnFamilyId(columnFamily.name());
                     if (!clHeader.isDirty(id) || reader.getFilePointer() < clHeader.getPosition(id))
                     {
