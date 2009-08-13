@@ -289,7 +289,7 @@ public class CommitLog
                 for (ColumnFamily columnFamily : columnFamilies)
                 {
                     /* TODO: Remove this to not process Hints */
-                    if (!DatabaseDescriptor.isApplicationColumnFamily(columnFamily.name()))
+                    if (columnFamily.name().equals(HintedHandOffManager.HINTS_CF))
                     {
                         row.removeColumnFamily(columnFamily);
                         continue;

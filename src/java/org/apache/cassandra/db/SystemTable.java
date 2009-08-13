@@ -27,9 +27,11 @@ import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.utils.BasicUtilities;
-import org.apache.cassandra.db.filter.NamesQueryFilter;
+import org.apache.cassandra.db.filter.IdentityQueryFilter;
 import org.apache.cassandra.db.filter.QueryPath;
 import org.apache.cassandra.db.filter.QueryFilter;
+import org.apache.cassandra.db.filter.NamesQueryFilter;
+import org.apache.cassandra.db.marshal.UTF8Type;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -75,6 +77,11 @@ public class SystemTable
         cf.addColumn(tokenColumn);
         rm.add(cf);
         rm.apply();
+        table.flush(false);
+/*
+        ColumnFamilyStore cfs = ColumnFamilyStore.getColumnFamilyStore(Table.SYSTEM_TABLE, LOCATION_KEY);
+        cfs.forceFlush();
+*/
     }
 
     /*
@@ -88,7 +95,7 @@ public class SystemTable
     {
         /* Read the system table to retrieve the storage ID and the generation */
         Table table = Table.open(Table.SYSTEM_TABLE);
-        QueryFilter filter = new NamesQueryFilter(LOCATION_KEY, new QueryPath(LOCATION_CF), GENERATION);
+        QueryFilter filter = new IdentityQueryFilter(LOCATION_KEY, new QueryPath(LOCATION_CF));
         ColumnFamily cf = table.getColumnFamilyStore(LOCATION_CF).getColumnFamily(filter);
 
         IPartitioner p = StorageService.getPartitioner();
