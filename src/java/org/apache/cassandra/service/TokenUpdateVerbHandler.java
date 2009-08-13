@@ -26,6 +26,7 @@ import org.apache.cassandra.dht.Token;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
 import org.apache.cassandra.utils.LogUtil;
+import org.apache.cassandra.io.DataInputBuffer;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -37,12 +38,16 @@ public class TokenUpdateVerbHandler implements IVerbHandler
 
     public void doVerb(Message message)
     {
-    	byte[] body = message.getMessageBody();
-        Token token = StorageService.getPartitioner().getTokenFactory().fromByteArray(body);
         try
         {
-        	logger_.info("Updating the token to [" + token + "]");
-        	StorageService.instance().updateToken(token);
+            byte[] body = message.getMessageBody();
+            DataInputBuffer bufIn = new DataInputBuffer();
+            bufIn.reset(body, body.length);
+            /* Deserialize to get the token for this endpoint. */
+            Token token = Token.serializer().deserialize(bufIn);
+        	
+            logger_.info("Updating the token to [" + token + "]");
+            StorageService.instance().updateToken(token);
         }
     	catch( IOException ex )
     	{

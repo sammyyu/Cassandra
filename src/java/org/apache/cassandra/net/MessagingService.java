@@ -537,6 +537,8 @@ public class MessagingService implements IMessagingService
             messageSerializerExecutor_.shutdownNow();
             messageDeserializerExecutor_.shutdownNow();
             streamExecutor_.shutdownNow();
+
+            StageManager.shutdown();
             
             /* shut down the cachetables */
             taskCompletionMap_.shutdown();
