@@ -18,15 +18,24 @@
 
 package org.apache.cassandra.service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.io.DataInputBuffer;
+import org.apache.cassandra.net.EndPoint;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.LogUtil;
-import org.apache.cassandra.io.DataInputBuffer;
 
 /**
  * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
@@ -48,6 +57,35 @@ public class TokenUpdateVerbHandler implements IVerbHandler
         	
             logger_.info("Updating the token to [" + token + "]");
             StorageService.instance().updateToken(token);
+            /* Get the headers for this message */
+            Map<String, byte[]> headers = message.getHeaders();
+            headers.remove( StorageService.getLocalStorageEndPoint().getHost() );
+            if (logger_.isDebugEnabled())
+              logger_.debug("Number of nodes in the header " + headers.size());
+            Set<String> nodes = headers.keySet();
+            
+            IPartitioner p = StorageService.getPartitioner();
+            for ( String node : nodes )
+            {            
+                if (logger_.isDebugEnabled())
+                  logger_.debug("Processing node " + node);
+                byte[] bytes = headers.remove(node);
+                /* Send a message to this node to update its token to the one retrieved. */
+                EndPoint target = new EndPoint(node, DatabaseDescriptor.getStoragePort());
+                token = p.getTokenFactory().fromByteArray(bytes);
+                
+                /* Reset the new Message */
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(bos);
+                Token.serializer().serialize(token, dos);
+                message.setMessageBody(bos.toByteArray());
+                
+                if (logger_.isDebugEnabled())
+                  logger_.debug("Sending a token update message to " + target + " to update it to " + token);
+                MessagingService.getMessagingInstance().sendOneWay(message, target);
+                break;
+            }                        
+
         }
     	catch( IOException ex )
     	{
