@@ -79,8 +79,8 @@ public class SystemTable
         rm.add(cf);
         rm.apply();
         metadata_.setStorageId(token);
-/*
         table.flush(false);
+/*
         ColumnFamilyStore cfs = ColumnFamilyStore.getColumnFamilyStore(Table.SYSTEM_TABLE, LOCATION_KEY);
         cfs.forceFlush();
 */
