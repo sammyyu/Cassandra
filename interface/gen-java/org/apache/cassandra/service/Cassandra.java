@@ -4,27 +4,6 @@
  * DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
  */
 package org.apache.cassandra.service;
-/*
- * 
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * 
- *   http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- * 
- */
-
 
 import java.util.List;
 import java.util.ArrayList;
@@ -876,10 +855,6 @@ public class Cassandra {
     public static final int COLUMN_PARENT = 3;
     public SlicePredicate predicate;
     public static final int PREDICATE = 4;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 5;
 
@@ -955,9 +930,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public get_slice_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -979,9 +953,8 @@ public class Cassandra {
       return this.key;
     }
 
-    public get_slice_args setKey(String key) {
+    public void setKey(String key) {
       this.key = key;
-      return this;
     }
 
     public void unsetKey() {
@@ -1003,9 +976,8 @@ public class Cassandra {
       return this.column_parent;
     }
 
-    public get_slice_args setColumn_parent(ColumnParent column_parent) {
+    public void setColumn_parent(ColumnParent column_parent) {
       this.column_parent = column_parent;
-      return this;
     }
 
     public void unsetColumn_parent() {
@@ -1027,9 +999,8 @@ public class Cassandra {
       return this.predicate;
     }
 
-    public get_slice_args setPredicate(SlicePredicate predicate) {
+    public void setPredicate(SlicePredicate predicate) {
       this.predicate = predicate;
-      return this;
     }
 
     public void unsetPredicate() {
@@ -1047,22 +1018,13 @@ public class Cassandra {
       }
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public get_slice_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -1455,13 +1417,27 @@ public class Cassandra {
       return new get_slice_result(this);
     }
 
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public java.util.Iterator<ColumnOrSuperColumn> getSuccessIterator() {
+      return (this.success == null) ? null : this.success.iterator();
+    }
+
+    public void addToSuccess(ColumnOrSuperColumn elem) {
+      if (this.success == null) {
+        this.success = new ArrayList<ColumnOrSuperColumn>();
+      }
+      this.success.add(elem);
+    }
+
     public List<ColumnOrSuperColumn> getSuccess() {
       return this.success;
     }
 
-    public get_slice_result setSuccess(List<ColumnOrSuperColumn> success) {
+    public void setSuccess(List<ColumnOrSuperColumn> success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -1483,9 +1459,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public get_slice_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -1507,9 +1482,8 @@ public class Cassandra {
       return this.nfe;
     }
 
-    public get_slice_result setNfe(NotFoundException nfe) {
+    public void setNfe(NotFoundException nfe) {
       this.nfe = nfe;
-      return this;
     }
 
     public void unsetNfe() {
@@ -1772,10 +1746,6 @@ public class Cassandra {
     public static final int KEY = 2;
     public ColumnPath column_path;
     public static final int COLUMN_PATH = 3;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 4;
 
@@ -1844,9 +1814,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public get_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -1868,9 +1837,8 @@ public class Cassandra {
       return this.key;
     }
 
-    public get_args setKey(String key) {
+    public void setKey(String key) {
       this.key = key;
-      return this;
     }
 
     public void unsetKey() {
@@ -1892,9 +1860,8 @@ public class Cassandra {
       return this.column_path;
     }
 
-    public get_args setColumn_path(ColumnPath column_path) {
+    public void setColumn_path(ColumnPath column_path) {
       this.column_path = column_path;
-      return this;
     }
 
     public void unsetColumn_path() {
@@ -1912,22 +1879,13 @@ public class Cassandra {
       }
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public get_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -2276,9 +2234,8 @@ public class Cassandra {
       return this.success;
     }
 
-    public get_result setSuccess(ColumnOrSuperColumn success) {
+    public void setSuccess(ColumnOrSuperColumn success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -2300,9 +2257,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public get_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -2324,9 +2280,8 @@ public class Cassandra {
       return this.nfe;
     }
 
-    public get_result setNfe(NotFoundException nfe) {
+    public void setNfe(NotFoundException nfe) {
       this.nfe = nfe;
-      return this;
     }
 
     public void unsetNfe() {
@@ -2573,10 +2528,6 @@ public class Cassandra {
     public static final int KEY = 2;
     public ColumnParent column_parent;
     public static final int COLUMN_PARENT = 3;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 5;
 
@@ -2645,9 +2596,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public get_count_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -2669,9 +2619,8 @@ public class Cassandra {
       return this.key;
     }
 
-    public get_count_args setKey(String key) {
+    public void setKey(String key) {
       this.key = key;
-      return this;
     }
 
     public void unsetKey() {
@@ -2693,9 +2642,8 @@ public class Cassandra {
       return this.column_parent;
     }
 
-    public get_count_args setColumn_parent(ColumnParent column_parent) {
+    public void setColumn_parent(ColumnParent column_parent) {
       this.column_parent = column_parent;
-      return this;
     }
 
     public void unsetColumn_parent() {
@@ -2713,22 +2661,13 @@ public class Cassandra {
       }
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public get_count_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -3068,10 +3007,9 @@ public class Cassandra {
       return this.success;
     }
 
-    public get_count_result setSuccess(int success) {
+    public void setSuccess(int success) {
       this.success = success;
       this.__isset.success = true;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -3091,9 +3029,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public get_count_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -3300,10 +3237,6 @@ public class Cassandra {
     public static final int VALUE = 4;
     public long timestamp;
     public static final int TIMESTAMP = 5;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 6;
 
@@ -3388,9 +3321,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public insert_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -3412,9 +3344,8 @@ public class Cassandra {
       return this.key;
     }
 
-    public insert_args setKey(String key) {
+    public void setKey(String key) {
       this.key = key;
-      return this;
     }
 
     public void unsetKey() {
@@ -3436,9 +3367,8 @@ public class Cassandra {
       return this.column_path;
     }
 
-    public insert_args setColumn_path(ColumnPath column_path) {
+    public void setColumn_path(ColumnPath column_path) {
       this.column_path = column_path;
-      return this;
     }
 
     public void unsetColumn_path() {
@@ -3460,9 +3390,8 @@ public class Cassandra {
       return this.value;
     }
 
-    public insert_args setValue(byte[] value) {
+    public void setValue(byte[] value) {
       this.value = value;
-      return this;
     }
 
     public void unsetValue() {
@@ -3484,10 +3413,9 @@ public class Cassandra {
       return this.timestamp;
     }
 
-    public insert_args setTimestamp(long timestamp) {
+    public void setTimestamp(long timestamp) {
       this.timestamp = timestamp;
       this.__isset.timestamp = true;
-      return this;
     }
 
     public void unsetTimestamp() {
@@ -3503,22 +3431,13 @@ public class Cassandra {
       this.__isset.timestamp = value;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public insert_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -3941,9 +3860,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public insert_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -3965,9 +3883,8 @@ public class Cassandra {
       return this.ue;
     }
 
-    public insert_result setUe(UnavailableException ue) {
+    public void setUe(UnavailableException ue) {
       this.ue = ue;
-      return this;
     }
 
     public void unsetUe() {
@@ -4169,10 +4086,6 @@ public class Cassandra {
     public static final int KEYSPACE = 1;
     public BatchMutation batch_mutation;
     public static final int BATCH_MUTATION = 2;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 3;
 
@@ -4234,9 +4147,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public batch_insert_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -4258,9 +4170,8 @@ public class Cassandra {
       return this.batch_mutation;
     }
 
-    public batch_insert_args setBatch_mutation(BatchMutation batch_mutation) {
+    public void setBatch_mutation(BatchMutation batch_mutation) {
       this.batch_mutation = batch_mutation;
-      return this;
     }
 
     public void unsetBatch_mutation() {
@@ -4278,22 +4189,13 @@ public class Cassandra {
       }
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public batch_insert_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -4590,9 +4492,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public batch_insert_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -4614,9 +4515,8 @@ public class Cassandra {
       return this.ue;
     }
 
-    public batch_insert_result setUe(UnavailableException ue) {
+    public void setUe(UnavailableException ue) {
       this.ue = ue;
-      return this;
     }
 
     public void unsetUe() {
@@ -4824,10 +4724,6 @@ public class Cassandra {
     public static final int COLUMN_PATH = 3;
     public long timestamp;
     public static final int TIMESTAMP = 4;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 5;
 
@@ -4904,9 +4800,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public remove_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -4928,9 +4823,8 @@ public class Cassandra {
       return this.key;
     }
 
-    public remove_args setKey(String key) {
+    public void setKey(String key) {
       this.key = key;
-      return this;
     }
 
     public void unsetKey() {
@@ -4952,9 +4846,8 @@ public class Cassandra {
       return this.column_path;
     }
 
-    public remove_args setColumn_path(ColumnPath column_path) {
+    public void setColumn_path(ColumnPath column_path) {
       this.column_path = column_path;
-      return this;
     }
 
     public void unsetColumn_path() {
@@ -4976,10 +4869,9 @@ public class Cassandra {
       return this.timestamp;
     }
 
-    public remove_args setTimestamp(long timestamp) {
+    public void setTimestamp(long timestamp) {
       this.timestamp = timestamp;
       this.__isset.timestamp = true;
-      return this;
     }
 
     public void unsetTimestamp() {
@@ -4995,22 +4887,13 @@ public class Cassandra {
       this.__isset.timestamp = value;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public remove_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -5386,9 +5269,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public remove_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -5410,9 +5292,8 @@ public class Cassandra {
       return this.ue;
     }
 
-    public remove_result setUe(UnavailableException ue) {
+    public void setUe(UnavailableException ue) {
       this.ue = ue;
-      return this;
     }
 
     public void unsetUe() {
@@ -5614,10 +5495,6 @@ public class Cassandra {
     public static final int KEYSPACE = 1;
     public BatchMutationSuper batch_mutation_super;
     public static final int BATCH_MUTATION_SUPER = 2;
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int consistency_level;
     public static final int CONSISTENCY_LEVEL = 3;
 
@@ -5679,9 +5556,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public batch_insert_super_column_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -5703,9 +5579,8 @@ public class Cassandra {
       return this.batch_mutation_super;
     }
 
-    public batch_insert_super_column_args setBatch_mutation_super(BatchMutationSuper batch_mutation_super) {
+    public void setBatch_mutation_super(BatchMutationSuper batch_mutation_super) {
       this.batch_mutation_super = batch_mutation_super;
-      return this;
     }
 
     public void unsetBatch_mutation_super() {
@@ -5723,22 +5598,13 @@ public class Cassandra {
       }
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
     public int getConsistency_level() {
       return this.consistency_level;
     }
 
-    /**
-     * 
-     * @see ConsistencyLevel
-     */
-    public batch_insert_super_column_args setConsistency_level(int consistency_level) {
+    public void setConsistency_level(int consistency_level) {
       this.consistency_level = consistency_level;
       this.__isset.consistency_level = true;
-      return this;
     }
 
     public void unsetConsistency_level() {
@@ -6035,9 +5901,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public batch_insert_super_column_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -6059,9 +5924,8 @@ public class Cassandra {
       return this.ue;
     }
 
-    public batch_insert_super_column_result setUe(UnavailableException ue) {
+    public void setUe(UnavailableException ue) {
       this.ue = ue;
-      return this;
     }
 
     public void unsetUe() {
@@ -6348,9 +6212,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public get_key_range_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -6372,9 +6235,8 @@ public class Cassandra {
       return this.column_family;
     }
 
-    public get_key_range_args setColumn_family(String column_family) {
+    public void setColumn_family(String column_family) {
       this.column_family = column_family;
-      return this;
     }
 
     public void unsetColumn_family() {
@@ -6396,9 +6258,8 @@ public class Cassandra {
       return this.start;
     }
 
-    public get_key_range_args setStart(String start) {
+    public void setStart(String start) {
       this.start = start;
-      return this;
     }
 
     public void unsetStart() {
@@ -6420,9 +6281,8 @@ public class Cassandra {
       return this.finish;
     }
 
-    public get_key_range_args setFinish(String finish) {
+    public void setFinish(String finish) {
       this.finish = finish;
-      return this;
     }
 
     public void unsetFinish() {
@@ -6444,10 +6304,9 @@ public class Cassandra {
       return this.count;
     }
 
-    public get_key_range_args setCount(int count) {
+    public void setCount(int count) {
       this.count = count;
       this.__isset.count = true;
-      return this;
     }
 
     public void unsetCount() {
@@ -6817,13 +6676,27 @@ public class Cassandra {
       return new get_key_range_result(this);
     }
 
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public java.util.Iterator<String> getSuccessIterator() {
+      return (this.success == null) ? null : this.success.iterator();
+    }
+
+    public void addToSuccess(String elem) {
+      if (this.success == null) {
+        this.success = new ArrayList<String>();
+      }
+      this.success.add(elem);
+    }
+
     public List<String> getSuccess() {
       return this.success;
     }
 
-    public get_key_range_result setSuccess(List<String> success) {
+    public void setSuccess(List<String> success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -6845,9 +6718,8 @@ public class Cassandra {
       return this.ire;
     }
 
-    public get_key_range_result setIre(InvalidRequestException ire) {
+    public void setIre(InvalidRequestException ire) {
       this.ire = ire;
-      return this;
     }
 
     public void unsetIre() {
@@ -7102,9 +6974,8 @@ public class Cassandra {
       return this.property;
     }
 
-    public get_string_property_args setProperty(String property) {
+    public void setProperty(String property) {
       this.property = property;
-      return this;
     }
 
     public void unsetProperty() {
@@ -7302,9 +7173,8 @@ public class Cassandra {
       return this.success;
     }
 
-    public get_string_property_result setSuccess(String success) {
+    public void setSuccess(String success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -7501,9 +7371,8 @@ public class Cassandra {
       return this.property;
     }
 
-    public get_string_list_property_args setProperty(String property) {
+    public void setProperty(String property) {
       this.property = property;
-      return this;
     }
 
     public void unsetProperty() {
@@ -7702,13 +7571,27 @@ public class Cassandra {
       return new get_string_list_property_result(this);
     }
 
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public java.util.Iterator<String> getSuccessIterator() {
+      return (this.success == null) ? null : this.success.iterator();
+    }
+
+    public void addToSuccess(String elem) {
+      if (this.success == null) {
+        this.success = new ArrayList<String>();
+      }
+      this.success.add(elem);
+    }
+
     public List<String> getSuccess() {
       return this.success;
     }
 
-    public get_string_list_property_result setSuccess(List<String> success) {
+    public void setSuccess(List<String> success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -7921,9 +7804,8 @@ public class Cassandra {
       return this.keyspace;
     }
 
-    public describe_keyspace_args setKeyspace(String keyspace) {
+    public void setKeyspace(String keyspace) {
       this.keyspace = keyspace;
-      return this;
     }
 
     public void unsetKeyspace() {
@@ -8154,13 +8036,23 @@ public class Cassandra {
       return new describe_keyspace_result(this);
     }
 
+    public int getSuccessSize() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public void putToSuccess(String key, Map<String,String> val) {
+      if (this.success == null) {
+        this.success = new HashMap<String,Map<String,String>>();
+      }
+      this.success.put(key, val);
+    }
+
     public Map<String,Map<String,String>> getSuccess() {
       return this.success;
     }
 
-    public describe_keyspace_result setSuccess(Map<String,Map<String,String>> success) {
+    public void setSuccess(Map<String,Map<String,String>> success) {
       this.success = success;
-      return this;
     }
 
     public void unsetSuccess() {
@@ -8182,9 +8074,8 @@ public class Cassandra {
       return this.nfe;
     }
 
-    public describe_keyspace_result setNfe(NotFoundException nfe) {
+    public void setNfe(NotFoundException nfe) {
       this.nfe = nfe;
-      return this;
     }
 
     public void unsetNfe() {

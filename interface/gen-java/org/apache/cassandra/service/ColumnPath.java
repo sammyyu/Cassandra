@@ -4,27 +4,6 @@
  * DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
  */
 package org.apache.cassandra.service;
-/*
- * 
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * 
- *   http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- * 
- */
-
 
 import java.util.List;
 import java.util.ArrayList;
@@ -109,9 +88,8 @@ public class ColumnPath implements TBase, java.io.Serializable, Cloneable {
     return this.column_family;
   }
 
-  public ColumnPath setColumn_family(String column_family) {
+  public void setColumn_family(String column_family) {
     this.column_family = column_family;
-    return this;
   }
 
   public void unsetColumn_family() {
@@ -133,9 +111,8 @@ public class ColumnPath implements TBase, java.io.Serializable, Cloneable {
     return this.super_column;
   }
 
-  public ColumnPath setSuper_column(byte[] super_column) {
+  public void setSuper_column(byte[] super_column) {
     this.super_column = super_column;
-    return this;
   }
 
   public void unsetSuper_column() {
@@ -157,9 +134,8 @@ public class ColumnPath implements TBase, java.io.Serializable, Cloneable {
     return this.column;
   }
 
-  public ColumnPath setColumn(byte[] column) {
+  public void setColumn(byte[] column) {
     this.column = column;
-    return this;
   }
 
   public void unsetColumn() {
@@ -341,18 +317,14 @@ public class ColumnPath implements TBase, java.io.Serializable, Cloneable {
       oprot.writeFieldEnd();
     }
     if (this.super_column != null) {
-      if (isSetSuper_column()) {
-        oprot.writeFieldBegin(SUPER_COLUMN_FIELD_DESC);
-        oprot.writeBinary(this.super_column);
-        oprot.writeFieldEnd();
-      }
+      oprot.writeFieldBegin(SUPER_COLUMN_FIELD_DESC);
+      oprot.writeBinary(this.super_column);
+      oprot.writeFieldEnd();
     }
     if (this.column != null) {
-      if (isSetColumn()) {
-        oprot.writeFieldBegin(COLUMN_FIELD_DESC);
-        oprot.writeBinary(this.column);
-        oprot.writeFieldEnd();
-      }
+      oprot.writeFieldBegin(COLUMN_FIELD_DESC);
+      oprot.writeBinary(this.column);
+      oprot.writeFieldEnd();
     }
     oprot.writeFieldStop();
     oprot.writeStructEnd();

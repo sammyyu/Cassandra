@@ -463,7 +463,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         assert oldMemtable.isFlushed() || oldMemtable.isClean(); 
     }
 
-    void forceFlushBinary()
+    public void forceFlushBinary()
     {
         submitFlush(binaryMemtable_.get());
     }
@@ -1376,7 +1376,8 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
 
     public ColumnFamily getColumnFamily(QueryFilter filter) throws IOException
     {
-        return getColumnFamily(filter, getDefaultGCBefore());
+        ColumnFamily cf = getColumnFamily(filter, getDefaultGCBefore());
+        return cf;
     }
 
     /**

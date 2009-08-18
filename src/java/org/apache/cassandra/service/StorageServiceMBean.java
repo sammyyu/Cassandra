@@ -88,4 +88,17 @@ public interface StorageServiceMBean
      * Remove all the existing snapshots.
      */
     public void clearSnapshot() throws IOException;
+
+    public void forceTableFlushBinary(String tableName) throws IOException;
+
+    /**
+     * Gets the number of sstables in queue before compaction kicks off
+     */
+    public int getCompactionThreshold();
+
+    /**
+     * Sets the number of sstables in queue before compaction kicks off
+     */
+    public void setCompactionThreshold(int threshold);
+
 }

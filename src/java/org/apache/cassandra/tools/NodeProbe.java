@@ -52,6 +52,8 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
 
+import com.digg.cassandra.locator.DiggEndPointSnitchMBean;
+
 /**
  * JMX client operations for Cassandra.
  */
@@ -253,11 +255,19 @@ public class NodeProbe
     /**
      * Trigger compaction of all tables.
      */
+    public void forceTableFlushBinary(String tableName) throws IOException
+    {
+        ssProxy.forceTableFlushBinary(tableName);
+    }
+
+    /**
+     * Trigger a binary flush on CFs of a table.
+     */
     public void forceTableCompaction() throws IOException
     {
         ssProxy.forceTableCompaction();
     }
-    
+
     /**
      * Write a textual representation of the Cassandra ring.
      * 
@@ -485,6 +495,62 @@ public class NodeProbe
     }
 
     /**
+     * Get the rack info
+     * 
+     * @param outs the stream to write to
+     */
+    public void printRackInfo(PrintStream outs)
+    {
+        try {
+            DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
+                mbeanServerConn, new ObjectName(DiggEndPointSnitchMBean.MBEAN_OBJECT_NAME), DiggEndPointSnitchMBean.class);
+            outs.println(snitchProxy.displayConfiguration());
+        }
+        catch (MalformedObjectNameException e)
+        {
+            throw new RuntimeException(
+                    "Invalid ObjectName? Please report this as a bug.", e);
+        }
+    }
+
+    /**
+     * Reload the rack property file
+     */
+    public void reloadRack() throws IOException
+    {
+        try {
+            DiggEndPointSnitchMBean snitchProxy = JMX.newMBeanProxy(
+                mbeanServerConn, new ObjectName(DiggEndPointSnitchMBean.MBEAN_OBJECT_NAME), DiggEndPointSnitchMBean.class);
+            snitchProxy.reloadConfiguration();
+        }
+        catch (MalformedObjectNameException e)
+        {
+            throw new RuntimeException(
+                    "Invalid ObjectName? Please report this as a bug.", e);
+        }
+    }
+    
+    /**
+     * Get the compaction threshold
+     * 
+     * @param outs the stream to write to
+     */
+    public void getCompactionThreshold(PrintStream outs)
+    {
+        outs.println("Current compaction threshold: " + ssProxy.getCompactionThreshold());
+    }
+
+    /**
+     * Set the compaction threshold
+     * 
+     * @param compactionThreshold compaction threshold
+     */
+    public void setCompactionThreshold(int compactionThreshold)
+    {
+        ssProxy.setCompactionThreshold(compactionThreshold);
+    }
+
+    /**
      * Retrieve any non-option arguments passed on the command line.
      * 
      * @return non-option command args
@@ -513,7 +579,8 @@ public class NodeProbe
     {
         HelpFormatter hf = new HelpFormatter();
         String header = String.format(
-                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, bootstrap, tpstats");
+                "%nAvailable commands: ring, cluster, info, cleanup, compact, cfstats, snapshot [name], clearsnapshot, bootstrap, flush_binary, rackinfo, reloadrack," +
+                " getcompactionthreshold, setcompactionthreshold threshold, tpstats");
         String usage = String.format("java %s -host <arg> <command>%n", NodeProbe.class.getName());
         hf.printHelp(usage, "", options, header);
     }
@@ -600,6 +667,39 @@ public class NodeProbe
                 NodeProbe.printUsage();
                 System.exit(1);                
             }
+        }
+        else if (cmdName.equals("flush_binary"))
+        {
+            if (probe.getArgs().length < 2)
+            {
+                System.err.println("Missing table name argument.");
+                NodeProbe.printUsage();
+                System.exit(1);
+            }
+            probe.forceTableFlushBinary(probe.getArgs()[1]);
+        }
+        else if (cmdName.equals("rackinfo"))
+        {
+            probe.printRackInfo(System.out);
+        }
+        else if (cmdName.equals("reloadrack"))
+        {
+            probe.reloadRack();
+        }
+        else if (cmdName.equals("getcompactionthreshold"))
+        {
+            probe.getCompactionThreshold(System.out);
+        }
+        else if (cmdName.equals("setcompactionthreshold"))
+        {
+            if (probe.getArgs().length < 2)
+            {
+                System.err.println("Missing threshold value");
+                NodeProbe.printUsage();
+                System.exit(1);
+            }
+            int threshold = Integer.parseInt(probe.getArgs()[1]);
+            probe.setCompactionThreshold(threshold);
         }
         else if (cmdName.equals("tpstats"))
         {

@@ -21,6 +21,7 @@ package org.apache.cassandra.db;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,6 +29,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.io.SSTableWriter;
 import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.config.DatabaseDescriptor;
@@ -42,7 +44,7 @@ import org.cliffc.high_scale_lib.NonBlockingHashMap;
 public class BinaryMemtable
 {
     private static Logger logger_ = Logger.getLogger( Memtable.class );
-    private int threshold_ = 512*1024*1024;
+    private int threshold_ = 256*1024*1024;
     private AtomicInteger currentSize_ = new AtomicInteger(0);
 
     /* Table and ColumnFamily name are used to determine the ColumnFamilyStore */
@@ -104,7 +106,8 @@ public class BinaryMemtable
                 if (!isFrozen_)
                 {
                     isFrozen_ = true;
-                    cfStore.submitFlush(this);
+                    // cfStore.submitFlush(this);
+                    BinaryMemtableManager.instance().submit(cfStore.getColumnFamilyName(), this);
                     cfStore.switchBinaryMemtable(key, buffer);
                 }
                 else
@@ -144,19 +147,37 @@ public class BinaryMemtable
         */
         ColumnFamilyStore cfStore = Table.open(table_).getColumnFamilyStore(cfName_);
         List<String> keys = new ArrayList<String>( columnFamilies_.keySet() );
-        SSTableWriter writer = new SSTableWriter(cfStore.getTempSSTablePath(), keys.size(), StorageService.getPartitioner());
-        Collections.sort(keys);
+        String path;
+        SSTableWriter writer;
+        /*
+            Adding a lock here so data directories are evenly used. By default currentIndex
+            is incremented, not an AtomicInteger.
+         */
+        lock_.lock();
+        try {
+            path = cfStore.getTempSSTablePath();
+            writer = new SSTableWriter(path, keys.size(), StorageService.getPartitioner());
+        }
+        finally {
+            lock_.unlock();
+        }
+
+        writer = new SSTableWriter(path, keys.size(), StorageService.getPartitioner());
+        final IPartitioner partitioner = StorageService.getPartitioner();
+        final Comparator<String> dc = partitioner.getDecoratedKeyComparator();
+        Collections.sort(keys, dc);
+
         /* Use this BloomFilter to decide if a key exists in a SSTable */
         for ( String key : keys )
-        {           
+        {
             byte[] bytes = columnFamilies_.get(key);
             if ( bytes.length > 0 )
-            {            	
+            {   
                 /* Now write the key and value to disk */
                 writer.append(key, bytes);
             }
         }
         cfStore.storeLocation(writer.closeAndOpenReader(DatabaseDescriptor.getKeysCachedFraction(table_)));
-        columnFamilies_.clear();       
+        columnFamilies_.clear();
     }
 }
