@@ -38,7 +38,7 @@
          are always time-sorted.
     -->
     <Keyspaces>
-        <Keyspace Name="Digg">
+        <Keyspace Name="Keyspace1">
             <!-- The fraction of keys per sstable whose locations we
                  keep in memory in "mostly LRU" order.  (JUST the key
                  locations, NOT any column values.)
@@ -76,7 +76,10 @@
                  do not prevent commitlog segments from being purged. 
 
             -->
-            <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="FriendActions"/>
+            <ColumnFamily CompareWith="UTF8Type" Name="Standard1" FlushPeriodInMinutes="60"/>
+            <ColumnFamily CompareWith="UTF8Type" Name="Standard2"/>
+            <ColumnFamily CompareWith="TimeUUIDType" Name="StandardByUUID1"/>
+            <ColumnFamily ColumnType="Super" CompareWith="UTF8Type" CompareSubcolumnsWith="UTF8Type" Name="Super1"/>
         </Keyspace>
     </Keyspaces>
 
@@ -113,10 +116,7 @@
          Out of the box, Cassandra provides
          org.apache.cassandra.locator.EndPointSnitch
     -->
-<!--
     <EndPointSnitch>org.apache.cassandra.locator.EndPointSnitch</EndPointSnitch>
--->
-    <EndPointSnitch>com.digg.cassandra.locator.DiggEndPointSnitch</EndPointSnitch>
 
     <!-- Strategy: Setting this to the class that implements IReplicaPlacementStrategy
 	     will change the way the node picker works.
@@ -129,7 +129,7 @@
     <ReplicaPlacementStrategy>org.apache.cassandra.locator.RackUnawareStrategy</ReplicaPlacementStrategy>
 
     <!-- Number of replicas of the data-->
-    <ReplicationFactor>3</ReplicationFactor>
+    <ReplicationFactor>1</ReplicationFactor>
 
     <!-- Directories: Specify where Cassandra should store different data on disk
          Keep the data disks and the CommitLog disks separate for best performance
@@ -138,13 +138,6 @@
     <DataFileDirectories>
         <DataFileDirectory>/var/cassandra/data</DataFileDirectory>
     </DataFileDirectories>
-<!--
-    <CommitLogDirectory>/mnt1/cassandra/commitlog</CommitLogDirectory>
-    <DataFileDirectories>
-        <DataFileDirectory>/mnt1/cassandra/data</DataFileDirectory>
-        <DataFileDirectory>/mnt2/cassandra/data</DataFileDirectory>
-    </DataFileDirectories>
--->
     <CalloutLocation>/var/cassandra/callouts</CalloutLocation>
     <BootstrapFileDirectory>/var/cassandra/bootstrap</BootstrapFileDirectory>
     <StagingFileDirectory>/var/cassandra/staging</StagingFileDirectory>
@@ -155,11 +148,7 @@
          You must change this if you are running multiple nodes!
     -->
     <Seeds>
-<!--
-       <Seed>10.2.128.90</Seed>
-       <Seed>10.2.128.88</Seed>
-       <Seed>10.2.128.100</Seed>
--->
+        <Seed>127.0.0.1</Seed>
     </Seeds>
 
 
@@ -182,10 +171,7 @@
          configured (hostname, name resolution, etc), and the Right
          Thing is to use the address associated with the hostname (it
          might not be). -->
-    <ListenAddress></ListenAddress>
-<!--
-    <ListenAddress>10.2.128.93</ListenAddress>
--->
+    <ListenAddress>localhost</ListenAddress>
     <!-- TCP port, for commands and data -->
     <StoragePort>7000</StoragePort>
     <!-- UDP port, for membership communications (gossip) -->
@@ -198,7 +184,7 @@
          Leaving this blank has the same effect it does for ListenAddress,
          (i.e. it will be based on the configured hostname of the node).
     -->
-    <ThriftAddress>0.0.0.0</ThriftAddress>
+    <ThriftAddress>localhost</ThriftAddress>
     <!-- Thrift RPC port (the port clients connect to). -->
     <ThriftPort>9160</ThriftPort>
     <!-- Whether or not to use a framed transport for Thrift. If this option
