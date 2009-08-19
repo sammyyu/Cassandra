@@ -1,3 +1,9 @@
+cassandra (0.4.0-digg6) unstable; urgency=low
+
+  * Version bump to match ops release and build against updated trunk
+
+ -- Jeremy Grosser <synack@digg.com>  Wed, 19 Aug 2009 00:42:38 -0700
+
 cassandra (0.4.0-digg1) unstable; urgency=low
 
   * New upstream version 
