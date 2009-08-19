@@ -89,7 +89,15 @@ do_start()
         -Dcom.sun.management.jmxremote.authenticate=false \
         org.apache.cassandra.service.CassandraDaemon
 
-    if ! is_running; then return 2; fi
+    max_time_to_wait=2
+    time_waited=0
+    while ! is_running; do
+        time_waited=`expr $time_waited + 1`
+        if [ $time_waited -ge $max_time_to_wait ]; then
+            return 2
+        fi
+        sleep 1
+    done
 }
 
 #
@@ -125,6 +133,9 @@ case "$1" in
 		2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
 	esac
 	;;
+  status)
+        is_running && return 0 || return 1
+        ;;
   restart|force-reload)
 	log_daemon_msg "Restarting $DESC" "$NAME"
 	do_stop
