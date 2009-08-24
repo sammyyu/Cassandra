@@ -77,10 +77,16 @@ public class TokenUpdater
             String line = null;
             while ((line = bufReader.readLine()) != null)
             {
+                line = line.trim();
+                if (line.length() <= 0)
+                {
+                    continue;
+                }
                 String[] nodeTokenPair = line.split(" ");
                 /* Add the node and the token pair into the header of this message. */
                 Token nodeToken = p.getTokenFactory().fromString(nodeTokenPair[1]);
                 tokenUpdateMessage.addHeader(nodeTokenPair[0], p.getTokenFactory().toByteArray(nodeToken));
+                System.out.println("Setting node " + nodeTokenPair[0] + " to " + nodeToken);
             }
         }
 

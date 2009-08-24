@@ -1,8 +1,20 @@
+cassandra (0.4.0-digg8) unstable; urgency=low
+
+  * Set ulimit before starting cassandra 
+
+ -- Jeremy Grosser <synack@digg.com>  Mon, 24 Aug 2009 15:55:50 -0700
+
+cassandra (0.4.0-digg7) unstable; urgency=low
+
+  * Fix status action of init script 
+
+ -- Jeremy Grosser <synack@digg.com>  Mon, 24 Aug 2009 12:29:20 -0700
+
 cassandra (0.4.0-digg6) unstable; urgency=low
 
-  * Version bump to match ops release and build against updated trunk
+  * Version bump 
 
- -- Jeremy Grosser <synack@digg.com>  Wed, 19 Aug 2009 00:42:38 -0700
+ -- Jeremy Grosser <synack@digg.com>  Wed, 19 Aug 2009 11:43:24 -0700
 
 cassandra (0.4.0-digg1) unstable; urgency=low
 

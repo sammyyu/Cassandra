@@ -23,6 +23,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 
 import org.apache.log4j.Logger;
 
@@ -62,13 +63,13 @@ public class TokenUpdateVerbHandler implements IVerbHandler
             headers.remove( StorageService.getLocalStorageEndPoint().getHost() );
             if (logger_.isDebugEnabled())
               logger_.debug("Number of nodes in the header " + headers.size());
-            Set<String> nodes = headers.keySet();
-            
+            Set<String> nodes = new HashSet<String>(headers.keySet());
+
             IPartitioner p = StorageService.getPartitioner();
             for ( String node : nodes )
             {            
                 if (logger_.isDebugEnabled())
-                  logger_.debug("Processing node " + node);
+                    logger_.debug("Processing sending token to node " + node);
                 byte[] bytes = headers.remove(node);
                 /* Send a message to this node to update its token to the one retrieved. */
                 EndPoint target = new EndPoint(node, DatabaseDescriptor.getStoragePort());
@@ -81,9 +82,8 @@ public class TokenUpdateVerbHandler implements IVerbHandler
                 message.setMessageBody(bos.toByteArray());
                 
                 if (logger_.isDebugEnabled())
-                  logger_.debug("Sending a token update message to " + target + " to update it to " + token);
+                    logger_.debug("Sending a token update message to " + target + " to update it to " + token);
                 MessagingService.getMessagingInstance().sendOneWay(message, target);
-                break;
             }                        
 
         }

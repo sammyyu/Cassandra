@@ -279,10 +279,12 @@ public class NodeProbe
         
         // Print range-to-endpoint mapping
         int counter = 0;
+        outs.println("Starting Token                                 Ending Token                                 Size Address        Ring");
         for (Range range : rangeMap.keySet()) {
             List<EndPoint> endpoints = rangeMap.get(range);
             
             outs.print(String.format("%-46s ", range.left()));
+            outs.print(String.format("%-46s ", range.right()));
             outs.print(String.format("%2d ", endpoints.size()));
             outs.print(String.format("%-15s", endpoints.get(0).getHost()));
             
