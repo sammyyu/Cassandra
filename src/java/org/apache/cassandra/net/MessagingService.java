@@ -195,8 +195,7 @@ public class MessagingService implements IMessagingService
                 maxSize,
                 Integer.MAX_VALUE,
                 TimeUnit.SECONDS,
-  //              new LinkedBlockingQueue<Runnable>(),
-                  new RealBlockingQueue<Runnable>(5000),
+                new LinkedBlockingQueue<Runnable>(),
                 new ThreadFactoryImpl("MESSAGE-SERIALIZER-POOL")
                 ); 
         
