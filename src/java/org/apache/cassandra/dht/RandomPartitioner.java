@@ -29,8 +29,13 @@ import org.apache.cassandra.utils.GuidGenerator;
 /**
  * This class generates a BigIntegerToken using MD5 hash.
  */
-public class RandomPartitioner implements IPartitioner
+public class RandomPartitioner implements IPartitioner<BigIntegerToken>
 {
+    public static final BigInteger TWO = new BigInteger("2");
+    public static final BigInteger MD5_MAX = TWO.pow(127);
+
+    public static final BigIntegerToken MINIMUM = new BigIntegerToken("0");
+
     private static final Comparator<String> comparator = new Comparator<String>()
     {
         public int compare(String o1, String o2)
@@ -79,6 +84,31 @@ public class RandomPartitioner implements IPartitioner
         return rcomparator;
     }
 
+    public BigIntegerToken midpoint(BigIntegerToken ltoken, BigIntegerToken rtoken)
+    {
+        BigInteger left = ltoken.token;
+        BigInteger right = rtoken.token;
+
+        BigInteger midpoint;
+        if (left.compareTo(right) < 0)
+        {
+            midpoint = left.add(right).divide(TWO);
+        }
+        else
+        {
+            // wrapping case
+            BigInteger distance = MD5_MAX.add(right).subtract(left);
+            BigInteger unchecked = distance.divide(TWO).add(left);
+            midpoint = (unchecked.compareTo(MD5_MAX) > 0) ? unchecked.subtract(MD5_MAX) : unchecked;
+        }
+        return new BigIntegerToken(midpoint);
+    }
+
+	public BigIntegerToken getMinimumToken()
+    {
+        return MINIMUM;
+    }
+
     public BigIntegerToken getDefaultToken()
     {
         String initialToken = DatabaseDescriptor.getInitialToken();
@@ -120,7 +150,12 @@ public class RandomPartitioner implements IPartitioner
         return tokenFactory;
     }
 
-    public Token getToken(String key)
+    public boolean preservesOrder()
+    {
+        return false;
+    }
+
+    public BigIntegerToken getToken(String key)
     {
         return new BigIntegerToken(FBUtilities.hash(key));
     }
