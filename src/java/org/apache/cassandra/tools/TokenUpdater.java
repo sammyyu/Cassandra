@@ -60,7 +60,13 @@ public class TokenUpdater
         System.out.println(p.getTokenFactory().getClass());
 
         String[] ipPortPair = ipPort.split(":");
-        EndPoint target = new EndPoint(ipPortPair[0], Integer.valueOf(ipPortPair[1]));
+        int port = 7000;
+        if (ipPortPair.length > 1)
+        {
+            port = Integer.valueOf(ipPortPair[1]);
+        }
+
+        EndPoint target = new EndPoint(ipPortPair[0], port);
 
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
