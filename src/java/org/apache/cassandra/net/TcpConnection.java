@@ -165,6 +165,7 @@ public class TcpConnection extends SelectionKeyHandler implements Comparable
         if ( data.length > 0 )
         {    
             boolean listening = !message.getFrom().equals(EndPoint.sentinelLocalEndPoint_);
+            boolean hasPendingWrites = false;
             ByteBuffer buffer = MessagingService.packIt( data , false, false, listening);   
             synchronized(this)
             {
@@ -179,8 +180,12 @@ public class TcpConnection extends SelectionKeyHandler implements Comparable
                 if (buffer.remaining() > 0) 
                 {                   
                     pendingWrites_.add(buffer);
-                    turnOnInterestOps(key_, SelectionKey.OP_WRITE);
+                    hasPendingWrites = true;
                 }
+            }
+            if (hasPendingWrites)
+            {
+                turnOnInterestOps(key_, SelectionKey.OP_WRITE);
             }
         }
     }
