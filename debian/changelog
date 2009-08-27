@@ -1,3 +1,9 @@
+cassandra (0.4.0-digg9) unstable; urgency=low
+
+  * CASSANDRA-392 and CASSANDRA-394 
+
+ -- Jeremy Grosser <synack@digg.com>  Thu, 27 Aug 2009 10:03:37 -0700
+
 cassandra (0.4.0-digg8) unstable; urgency=low
 
   * Set ulimit before starting cassandra 
