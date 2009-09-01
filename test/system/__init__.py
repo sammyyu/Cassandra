@@ -107,7 +107,7 @@ class CassandraTester(object):
             open('/tmp/kill', 'w').write('killing %s\n' % pid())
             os.kill(pid(), signal.SIGTERM)
             # TODO kill server with SIGKILL if it's still alive
-            time.sleep(0.5)
+            time.sleep(1.5)
             # TODO assert server is Truly Dead
 
 # vim:ai sw=4 ts=4 tw=0 et
