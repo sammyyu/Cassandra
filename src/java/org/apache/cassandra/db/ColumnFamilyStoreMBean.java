@@ -18,6 +18,9 @@
 
 package org.apache.cassandra.db;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * The MBean interface for ColumnFamilyStore
  * 
@@ -85,4 +88,13 @@ public interface ColumnFamilyStoreMBean
      */
     public int getPendingTasks();
     
+    /**
+     * @return a information about the sstables and it size.
+     */
+    public Map<String, Long> getSSTablesInfo();
+
+    /**
+     * @return the number of threads waiting in sstablelock
+     */
+    public int getQueueLengthOfSSTableLock();
 }

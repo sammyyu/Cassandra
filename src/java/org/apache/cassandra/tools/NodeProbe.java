@@ -44,6 +44,7 @@ import org.apache.cassandra.db.ColumnFamilyStoreMBean;
 import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.net.EndPoint;
 import org.apache.cassandra.service.StorageServiceMBean;
+import org.apache.cassandra.utils.FileUtils;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -348,6 +349,7 @@ public class NodeProbe
                 int tableReadCount = 0;
                 int tableWriteCount = 0;
                 int tablePendingTasks = 0;
+                int ssTableLockQueueLength = 0;
                 double tableTotalReadTime = 0.0f;
                 double tableTotalWriteTime = 0.0f;
                 
@@ -361,6 +363,7 @@ public class NodeProbe
                     tableWriteCount += writeCount;
                     tableTotalWriteTime += cfstore.getWriteLatency() * writeCount;
                     tablePendingTasks += cfstore.getPendingTasks();
+                    ssTableLockQueueLength += cfstore.getQueueLengthOfSSTableLock();
                 }
                 
                 double tableReadLatency = Double.NaN;
@@ -378,6 +381,7 @@ public class NodeProbe
                 outs.println("\tWrite Count: " + tableWriteCount);
                 outs.println("\tWrite Latency: " + String.format("%01.3f", tableWriteLatency) + " ms.");
                 outs.println("\tPending Tasks: " + tablePendingTasks);
+                outs.println("\tSS Table Lock Queue Length: " + ssTableLockQueueLength);
                 // print out column family statistic for this table
                 for (ColumnFamilyStoreMBean cfstore: columnFamilies) {
                     outs.println("\t\tColumn Family: " + cfstore.getColumnFamilyName());
@@ -389,6 +393,15 @@ public class NodeProbe
                     outs.println("\t\tWrite Count: " + cfstore.getWriteCount());
                     outs.println("\t\tWrite Latency: " + String.format("%01.3f", cfstore.getWriteLatency()) + " ms.");
                     outs.println("\t\tPending Tasks: " + cfstore.getPendingTasks());
+                    outs.println("\t\tPending Tasks: " + cfstore.getPendingTasks());
+                    outs.println("\t\tSS Table Lock Queue Length: " + cfstore.getQueueLengthOfSSTableLock());
+                    Map <String, Long> sstableInfo = cfstore.getSSTablesInfo();
+                    long totalSpaceUsed = 0;
+                    for (long spaceUsed : sstableInfo.values()) {
+                        totalSpaceUsed += spaceUsed;
+                    }
+                    outs.println("\t\tNumber Of SSTables: " + sstableInfo.keySet().size());
+                    outs.println("\t\tSSTable disk used (excluding index and filter): " + FileUtils.stringifyFileSize(totalSpaceUsed));
                     outs.println("");
                 }
                 outs.println("----------------");

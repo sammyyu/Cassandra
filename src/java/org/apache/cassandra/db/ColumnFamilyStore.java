@@ -1369,6 +1369,29 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return writeStats_.mean();
     }
 
+    /**
+     * @return a information about the sstables and it size.
+     */
+    public Map<String, Long> getSSTablesInfo() {
+        Map<String, Long> sstableMap = new HashMap<String, Long> (); 
+        for (String sstableName: this.ssTables_.keySet())
+        {
+            File sstableFile = new File(sstableName);
+            if (sstableFile.exists())
+            {
+                sstableMap.put(sstableName, sstableFile.length());
+            }
+        }
+        return sstableMap;
+    }
+    
+    /**
+     * @return the number of threads waiting in sstablelock
+     */
+    public int getQueueLengthOfSSTableLock() {
+        return sstableLock_.getQueueLength();
+    }
+
     public ColumnFamily getColumnFamily(String key, QueryPath path, byte[] start, byte[] finish, boolean reversed, int limit) throws IOException
     {
         return getColumnFamily(new SliceQueryFilter(key, path, start, finish, reversed, limit));
@@ -1652,3 +1675,4 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
     }
 }
+
