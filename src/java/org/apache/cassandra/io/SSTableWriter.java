@@ -33,7 +33,6 @@ import org.apache.log4j.Logger;
 import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.utils.BloomFilter;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import com.reardencommerce.kernel.collections.shared.evictable.ConcurrentLinkedHashMap;
 
 public class SSTableWriter extends SSTable
 {
@@ -121,7 +120,7 @@ public class SSTableWriter extends SSTable
     /**
      * Renames temporary SSTable files to valid data, index, and bloom filter files
      */
-    public SSTableReader closeAndOpenReader(double cacheFraction) throws IOException
+    public SSTableReader closeAndOpenReader() throws IOException
     {
         // bloom filter
         FileOutputStream fos = new FileOutputStream(filterFilename());
@@ -142,10 +141,7 @@ public class SSTableWriter extends SSTable
         rename(filterFilename());
         path = rename(path); // important to do this last since index & filter file names are derived from it
 
-        ConcurrentLinkedHashMap<String,Long> keyCache = cacheFraction > 0
-                                                        ? SSTableReader.createKeyCache((int) (cacheFraction * keysWritten))
-                                                        : null;
-        return new SSTableReader(path, partitioner, indexPositions, bf, keyCache);
+        return new SSTableReader(path, partitioner, indexPositions, bf);
     }
 
 }

@@ -8,7 +8,6 @@ bin/cassandra-cli usr/sbin
 bin/nodeprobe usr/sbin
 bin/tokenupdater usr/sbin
 lib/antlr-3.1.3.jar usr/share/cassandra
-lib/clhm-20090629.jar usr/share/cassandra
 lib/commons-cli-1.1.jar usr/share/cassandra
 lib/commons-collections-3.2.1.jar usr/share/cassandra
 lib/commons-javaflow-1.0-SNAPSHOT.jar usr/share/cassandra
