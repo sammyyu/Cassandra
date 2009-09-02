@@ -18,14 +18,29 @@
 
 package org.apache.cassandra.service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.apache.log4j.Logger;
 
+import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.dht.IPartitioner;
 import org.apache.cassandra.dht.Token;
+import org.apache.cassandra.io.DataInputBuffer;
+import org.apache.cassandra.net.EndPoint;
 import org.apache.cassandra.net.IVerbHandler;
 import org.apache.cassandra.net.Message;
+import org.apache.cassandra.net.MessagingService;
+import org.apache.cassandra.service.StorageService;
 import org.apache.cassandra.utils.LogUtil;
+
+/**
+ * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
+ */
 
 public class TokenUpdateVerbHandler implements IVerbHandler
 {
@@ -33,18 +48,50 @@ public class TokenUpdateVerbHandler implements IVerbHandler
 
     public void doVerb(Message message)
     {
-    	byte[] body = message.getMessageBody();
-        Token token = StorageService.getPartitioner().getTokenFactory().fromByteArray(body);
         try
         {
-        	logger_.info("Updating the token to [" + token + "]");
-        	StorageService.instance().updateToken(token);
+            byte[] body = message.getMessageBody();
+            DataInputBuffer bufIn = new DataInputBuffer();
+            bufIn.reset(body, body.length);
+            /* Deserialize to get the token for this endpoint. */
+            Token token = Token.serializer().deserialize(bufIn);
+            
+            logger_.info("Updating the token to [" + token + "]");
+            StorageService.instance().updateToken(token);
+            /* Get the headers for this message */
+            Map<String, byte[]> headers = message.getHeaders();
+            headers.remove( StorageService.getLocalStorageEndPoint().getHost() );
+            if (logger_.isDebugEnabled())
+              logger_.debug("Number of nodes in the header " + headers.size());
+            Set<String> nodes = new HashSet<String>(headers.keySet());
+
+            IPartitioner p = StorageService.getPartitioner();
+            for ( String node : nodes )
+            {            
+                if (logger_.isDebugEnabled())
+                    logger_.debug("Processing sending token to node " + node);
+                byte[] bytes = headers.remove(node);
+                /* Send a message to this node to update its token to the one retrieved. */
+                EndPoint target = new EndPoint(node, DatabaseDescriptor.getStoragePort());
+                token = p.getTokenFactory().fromByteArray(bytes);
+                
+                /* Reset the new Message */
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                DataOutputStream dos = new DataOutputStream(bos);
+                Token.serializer().serialize(token, dos);
+                message.setMessageBody(bos.toByteArray());
+                
+                if (logger_.isDebugEnabled())
+                    logger_.debug("Sending a token update message to " + target + " to update it to " + token);
+                MessagingService.getMessagingInstance().sendOneWay(message, target);
+            }                        
+
         }
-    	catch( IOException ex )
-    	{
-    		if (logger_.isDebugEnabled())
-    		  logger_.debug(LogUtil.throwableToString(ex));
-    	}
+        catch( IOException ex )
+        {
+            if (logger_.isDebugEnabled())
+              logger_.debug(LogUtil.throwableToString(ex));
+        }
     }
 
 }
