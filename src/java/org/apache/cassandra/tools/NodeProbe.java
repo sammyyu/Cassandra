@@ -349,7 +349,6 @@ public class NodeProbe
                 int tableReadCount = 0;
                 int tableWriteCount = 0;
                 int tablePendingTasks = 0;
-                int ssTableLockQueueLength = 0;
                 double tableTotalReadTime = 0.0f;
                 double tableTotalWriteTime = 0.0f;
                 int ssTableLockQueueLength = 0;
