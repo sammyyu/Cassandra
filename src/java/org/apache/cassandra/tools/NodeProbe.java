@@ -352,6 +352,7 @@ public class NodeProbe
                 int ssTableLockQueueLength = 0;
                 double tableTotalReadTime = 0.0f;
                 double tableTotalWriteTime = 0.0f;
+                int ssTableLockQueueLength = 0;
                 
                 outs.println("Keyspace: " + tableName);
                 for (ColumnFamilyStoreMBean cfstore: columnFamilies) {
@@ -399,7 +400,7 @@ public class NodeProbe
                     for (long spaceUsed : sstableInfo.values()) {
                         totalSpaceUsed += spaceUsed;
                     }
-                    outs.println("\t\tNumber Of SSTables: " + sstableInfo.keySet().size());
+                    outs.println("\t\tNumber Of SSTables: " + cfstore.getSSTableCount());
                     outs.println("\t\tSSTable disk used (excluding index and filter): " + FileUtils.stringifyFileSize(totalSpaceUsed));
                     outs.println("");
                 }
@@ -457,6 +458,12 @@ public class NodeProbe
         double memUsed = (double)heapUsage.getUsed() / (1024 * 1024);
         double memMax = (double)heapUsage.getMax() / (1024 * 1024);
         outs.println(String.format("%-17s: %.2f / %.2f", "Heap Memory (MB)", memUsed, memMax));
+
+        // Data directory usage info
+        outs.println("Data directory:");
+        for (Map.Entry<String, String> entry :ssProxy.getDataLocationSpaceInfo().entrySet()) {
+            outs.println("\t" + String.format("%-17s: %s", entry.getKey(), entry.getValue()));
+        }
     }
     
     /**

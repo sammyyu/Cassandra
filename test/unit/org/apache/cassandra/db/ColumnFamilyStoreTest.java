@@ -70,7 +70,7 @@ public class ColumnFamilyStoreTest extends CleanupHelper
             all.add(fname);
         }
 
-        Set<List<String>> buckets = ColumnFamilyStore.getCompactionBuckets(all, 50);
+        Set<List<String>> buckets = ColumnFamilyStore.getCompactionBuckets(all, 50).keySet();
         assert buckets.size() == 2 : bucketString(buckets);
         Iterator<List<String>> iter = buckets.iterator();
         List<String> bucket1 = iter.next();

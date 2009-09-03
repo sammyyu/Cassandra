@@ -89,6 +89,11 @@ public interface ColumnFamilyStoreMBean
     public int getPendingTasks();
     
     /**
+     * @return the number of sstables.
+     */
+    public int getSSTableCount();
+ 
+    /**
      * @return a information about the sstables and it size.
      */
     public Map<String, Long> getSSTablesInfo();
@@ -97,4 +102,10 @@ public interface ColumnFamilyStoreMBean
      * @return the number of threads waiting in sstablelock
      */
     public int getQueueLengthOfSSTableLock();
+
+    /**
+     * @return a map of sstable statistics with the key being average size and 
+     * value being the number of sstables.
+     */
+    public Map<Long, List<String>> getCompactionBucketInfo();
 }

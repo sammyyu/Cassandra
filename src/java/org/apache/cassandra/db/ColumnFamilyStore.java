@@ -92,6 +92,12 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     private TimedStatsDeque readStats_ = new TimedStatsDeque(60000);
     private TimedStatsDeque writeStats_ = new TimedStatsDeque(60000);
 
+    /**
+     * The minimum compaction bucket size in order for the sstable to be grouped into
+     * another bucket.
+     */
+    private long minimumCompactionBucketSize = 50L * 1024L * 1024L;
+    
     ColumnFamilyStore(String table, String columnFamilyName, boolean isSuper, int indexValue) throws IOException
     {
         table_ = table;
@@ -646,7 +652,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     /*
      * Group files of similar size into buckets.
      */
-    static Set<List<String>> getCompactionBuckets(List<String> files, long min)
+    static Map<List<String>, Long> getCompactionBuckets(Iterable<String> files, long min)
     {
         Map<List<String>, Long> buckets = new ConcurrentHashMap<List<String>, Long>();
         for (String fname : files)
@@ -682,7 +688,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
             }
         }
 
-        return buckets.keySet();
+        return buckets;
     }
 
     /*
@@ -692,8 +698,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     {
         List<String> files = new ArrayList<String>(ssTables_.keySet());
         int filesCompacted = 0;
-        Set<List<String>> buckets = getCompactionBuckets(files, 50L * 1024L * 1024L);
-        for (List<String> fileList : buckets)
+        for (List<String> fileList : getCompactionBuckets(files,  minimumCompactionBucketSize).keySet())
         {
             Collections.sort(fileList, new FileNameComparator(FileNameComparator.Ascending));
             if (fileList.size() < threshold)
@@ -1342,12 +1347,20 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return writeStats_.mean();
     }
 
+
+    /**
+     * @return the number of sstables.
+     */
+    public int getSSTableCount() {
+        return ssTables_.size();
+    }
+
     /**
      * @return a information about the sstables and it size.
      */
     public Map<String, Long> getSSTablesInfo() {
         Map<String, Long> sstableMap = new HashMap<String, Long> (); 
-        for (String sstableName: this.ssTables_.keySet())
+        for (String sstableName: ssTables_.keySet())
         {
             File sstableFile = new File(sstableName);
             if (sstableFile.exists())
@@ -1357,6 +1370,19 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
         }
         return sstableMap;
     }
+
+    /**
+     * @return a map of sstable statistics with the key being average size and 
+     * value being the number of sstables.
+     */
+    public Map<Long, List<String>> getCompactionBucketInfo() {
+        Map<List<String>, Long> originalCompactionBucket = getCompactionBuckets(ssTables_.keySet(), minimumCompactionBucketSize);
+        Map<Long, List<String>> compactionBucketInfo = new HashMap<Long, List<String>>();
+        for (Map.Entry<List<String>, Long> entry: originalCompactionBucket.entrySet()) {
+            compactionBucketInfo.put(entry.getValue(), entry.getKey());
+        }
+        return compactionBucketInfo;
+    }
     
     /**
      * @return the number of threads waiting in sstablelock
@@ -1364,7 +1390,7 @@ public final class ColumnFamilyStore implements ColumnFamilyStoreMBean
     public int getQueueLengthOfSSTableLock() {
         return sstableLock_.getQueueLength();
     }
-
+    
     public ColumnFamily getColumnFamily(String key, QueryPath path, byte[] start, byte[] finish, boolean reversed, int limit) throws IOException
     {
         return getColumnFamily(new SliceQueryFilter(key, path, start, finish, reversed, limit));

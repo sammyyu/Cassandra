@@ -26,10 +26,6 @@ import org.apache.cassandra.dht.Range;
 import org.apache.cassandra.net.EndPoint;
 
 
-/**
- * Author : Avinash Lakshman ( alakshman@facebook.com) & Prashant Malik ( pmalik@facebook.com )
- */
-
 public interface StorageServiceMBean
 {    
     public String getLiveNodes();
@@ -89,7 +85,17 @@ public interface StorageServiceMBean
      */
     public void clearSnapshot() throws IOException;
 
+    /**
+     * Flush all binary memtables for a table
+     * @param tableName
+     * @throws IOException
+     */
     public void forceTableFlushBinary(String tableName) throws IOException;
+
+    /**
+     * @return the free space available for each data location
+     */
+    public Map<String, String> getDataLocationSpaceInfo();
 
     /**
      * Gets the number of sstables in queue before compaction kicks off

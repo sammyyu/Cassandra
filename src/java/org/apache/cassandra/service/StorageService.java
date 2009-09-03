@@ -1089,4 +1089,18 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
 		}
 		return suitableEndPoints;
 	}
+
+    /**
+     * @return the free space available for each data location
+     */
+    public Map<String, String> getDataLocationSpaceInfo() {
+        Map <String, String> dataDirectoryMap = new HashMap<String, String> ();
+        for (String dataFileLocation: DatabaseDescriptor.getAllDataFileLocations())
+        {
+            File dataFileLocationPath = new File(dataFileLocation);
+            dataDirectoryMap.put(dataFileLocation, FileUtils.stringifyFileSize(dataFileLocationPath.getUsableSpace()) + "/" +
+                    FileUtils.stringifyFileSize(dataFileLocationPath.getTotalSpace()));
+        }
+        return dataDirectoryMap;
+    }
 }
