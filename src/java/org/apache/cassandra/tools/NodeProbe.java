@@ -393,7 +393,6 @@ public class NodeProbe
                     outs.println("\t\tWrite Count: " + cfstore.getWriteCount());
                     outs.println("\t\tWrite Latency: " + String.format("%01.3f", cfstore.getWriteLatency()) + " ms.");
                     outs.println("\t\tPending Tasks: " + cfstore.getPendingTasks());
-                    outs.println("\t\tPending Tasks: " + cfstore.getPendingTasks());
                     outs.println("\t\tSS Table Lock Queue Length: " + cfstore.getQueueLengthOfSSTableLock());
                     Map <String, Long> sstableInfo = cfstore.getSSTablesInfo();
                     long totalSpaceUsed = 0;
