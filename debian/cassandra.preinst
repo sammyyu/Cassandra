@@ -1,0 +1,29 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    install|upgrade)
+        if ! getent passwd cassandra >/dev/null; then
+            # Add system user: cassandra
+            adduser \
+                --system \
+                --disabled-login \
+                --group \
+                --home /var/cassandra \
+                --gecos "Cassandra User" \
+                --shell /bin/sh \
+                cassandra >/dev/null
+        fi
+        ;;
+
+    abort-upgrade)
+        ;;
+
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

@@ -19,6 +19,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 CONFDIR=/etc/cassandra
 JAVA_HOME="/usr/lib/jvm/java-6-sun"
 JSVC=/usr/bin/jsvc
+JSVC_USER=cassandra
 JVM_MAX_MEM="1G"
 JVM_START_MEM="128M"
 
@@ -76,6 +77,7 @@ do_start()
 
     ulimit -n 65535
     $JSVC \
+        -user $JSVC_USER \
         -home $JAVA_HOME \
         -pidfile $PIDFILE \
         -errfile "&1" \
@@ -112,7 +114,7 @@ do_stop()
 	#   2 if daemon could not be stopped
 	#   other if a failure occurred
     is_running || return 1
-    $JSVC -stop -home $JAVA_HOME -pidfile $PIDFILE \
+    $JSVC -stop -user $JSVC_USER -home $JAVA_HOME -pidfile $PIDFILE \
             org.apache.cassandra.service.CassandraJsvcDaemon
     is_running && return 2 || return 0
 }

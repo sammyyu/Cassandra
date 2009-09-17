@@ -1,37 +1,43 @@
+cassandra (0.4.0-digg10) unstable; urgency=low
+
+  * Run cassandra under the cassandra user.
+
+ -- Paul Lathrop <plathrop@digg.com>  Wed, 16 Sep 2009 18:22:54 -0700
+
 cassandra (0.4.0-digg9) unstable; urgency=low
 
-  * CASSANDRA-392 and CASSANDRA-394 
+  * CASSANDRA-392 and CASSANDRA-394
 
  -- Jeremy Grosser <synack@digg.com>  Thu, 27 Aug 2009 10:03:37 -0700
 
 cassandra (0.4.0-digg8) unstable; urgency=low
 
-  * Set ulimit before starting cassandra 
+  * Set ulimit before starting cassandra
 
  -- Jeremy Grosser <synack@digg.com>  Mon, 24 Aug 2009 15:55:50 -0700
 
 cassandra (0.4.0-digg7) unstable; urgency=low
 
-  * Fix status action of init script 
+  * Fix status action of init script
 
  -- Jeremy Grosser <synack@digg.com>  Mon, 24 Aug 2009 12:29:20 -0700
 
 cassandra (0.4.0-digg6) unstable; urgency=low
 
-  * Version bump 
+  * Version bump
 
  -- Jeremy Grosser <synack@digg.com>  Wed, 19 Aug 2009 11:43:24 -0700
 
 cassandra (0.4.0-digg1) unstable; urgency=low
 
-  * New upstream version 
+  * New upstream version
 
  -- Jeremy Grosser <synack@digg.com>  Mon, 03 Aug 2009 14:03:03 -0700
 
 cassandra (0.3.0-2) unstable; urgency=low
 
   * Non-maintainer upload.
-  * Switch to using Sun Java 
+  * Switch to using Sun Java
 
  -- Jeremy Grosser <synack@digg.com>  Wed, 29 Jul 2009 12:03:11 -0700
 
