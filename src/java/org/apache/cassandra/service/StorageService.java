@@ -648,7 +648,6 @@ public final class StorageService implements IEndPointStateChangeSubscriber, Sto
             logger_.debug("computing ranges for " + StringUtils.join(sortedTokens, ", "));
 
         List<Range> ranges = new ArrayList<Range>();
-        Collections.sort(sortedTokens);
         int size = sortedTokens.size();
         for (int i = 1; i < size; ++i)
         {
